@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#183c2b">
+  <title>Fieldnote — Poultry farm manager</title>
+  <style>
+    :root {
+      --forest: #183c2b;
+      --forest-2: #244c38;
+      --leaf: #5e8c60;
+      --lime: #d7ed9f;
+      --paper: #f7f8f3;
+      --white: #fff;
+      --ink: #1c2a21;
+      --muted: #78827a;
+      --line: #e8ebe4;
+      --orange: #d58b3a;
+      --red: #bd5b4e;
+      --shadow: 0 12px 40px rgba(28, 42, 33, .07);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      font-synthesis: none;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; background: var(--paper); }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .app { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: 252px; flex: 0 0 252px; background: var(--forest); color: #fff;
+      padding: 27px 16px 18px; display: flex; flex-direction: column; min-height: 100vh;
+    }
+    .brand { display: flex; align-items: center; gap: 11px; padding: 0 12px 30px; }
+    .brand-mark { width: 37px; height: 37px; background: var(--lime); color: var(--forest); border-radius: 12px; display: grid; place-items: center; }
+    .brand-mark svg { width: 22px; height: 22px; }
+    .brand-name { font-size: 19px; line-height: 1.1; font-weight: 720; letter-spacing: -.5px; }
+    .brand-caption { color: #b6c8b9; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 5px; }
+    .nav-label { color: #92aa97; font-size: 10px; font-weight: 700; letter-spacing: 1.3px; text-transform: uppercase; padding: 9px 13px 10px; }
+    .nav-list { display: grid; gap: 4px; }
+    .nav-item { width: 100%; color: #d4dfd5; border: 0; text-align: left; background: transparent; padding: 11px 13px; border-radius: 9px; display: flex; align-items: center; gap: 12px; font-size: 13px; transition: background .15s, color .15s; }
+    .nav-item:hover { background: rgba(255,255,255,.08); color: white; }
+    .nav-item.active { background: #315a40; color: white; box-shadow: inset 3px 0 var(--lime); }
+    .nav-icon { display: grid; place-items: center; width: 18px; opacity: .9; font-size: 16px; }
+    .nav-count { margin-left: auto; color: #d8edaa; font-size: 11px; }
+    .side-bottom { margin-top: auto; }
+    .farm-card { margin: 20px 4px 14px; padding: 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.055); }
+    .farm-overline { color: #a9bdad; text-transform: uppercase; letter-spacing: 1px; font-size: 9px; }
+    .farm-name { font-weight: 650; margin-top: 6px; font-size: 13px; }
+    .farm-location { color: #adbdaf; font-size: 11px; margin-top: 4px; }
+    .profile { border-top: 1px solid rgba(255,255,255,.12); padding: 17px 7px 0; display: flex; gap: 10px; align-items: center; }
+    .avatar { width: 33px; height: 33px; border-radius: 50%; display: grid; place-items: center; background: #d8e6be; color: var(--forest); font-weight: 750; font-size: 12px; }
+    .profile-name { font-size: 12px; font-weight: 650; }
+    .profile-role { color: #a9bdad; font-size: 10px; margin-top: 3px; }
+    .main { flex: 1; min-width: 0; }
+    .topbar { height: 76px; background: rgba(255,255,255,.82); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; padding: 0 38px; position: sticky; top: 0; z-index: 3; backdrop-filter: blur(12px); }
+    .breadcrumb { color: var(--muted); font-size: 12px; }
+    .breadcrumb strong { color: var(--ink); font-weight: 650; }
+    .top-actions { display: flex; align-items: center; gap: 17px; }
+    .date-pill { display: flex; align-items: center; gap: 8px; color: #657168; font-size: 12px; }
+    .icon-button { border: 1px solid var(--line); border-radius: 9px; width: 37px; height: 37px; background: #fff; color: var(--forest); display: grid; place-items: center; position: relative; }
+    .icon-button .dot { position: absolute; width: 7px; height: 7px; top: 7px; right: 7px; background: var(--orange); border-radius: 50%; border: 1px solid #fff; }
+    .mobile-brand { display: none; }
+    .content { max-width: 1480px; padding: 32px 38px 50px; margin: auto; }
+    .page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 25px; }
+    .eyebrow { color: var(--leaf); font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; font-weight: 750; margin-bottom: 8px; }
+    h1 { margin: 0; font-size: clamp(24px, 3vw, 31px); letter-spacing: -1.1px; line-height: 1.14; }
+    .subtitle { color: var(--muted); margin: 8px 0 0; font-size: 13px; }
+    .button { border: 0; border-radius: 8px; background: var(--forest); color: white; padding: 11px 15px; font-size: 12px; font-weight: 650; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 3px 8px rgba(24,60,43,.12); transition: transform .12s, background .12s; white-space: nowrap; }
+    .button:hover { background: var(--forest-2); transform: translateY(-1px); }
+    .button.secondary { color: var(--forest); background: white; border: 1px solid var(--line); box-shadow: none; }
+    .button.secondary:hover { background: #f8faf5; }
+    .button.small { padding: 8px 11px; font-size: 11px; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; margin-bottom: 17px; }
+    .metric { background: white; border: 1px solid var(--line); border-radius: 12px; padding: 17px 18px; min-height: 125px; }
+    .metric-top { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 11px; }
+    .metric-icon { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font-size: 15px; background: #edf4e7; color: var(--forest); }
+    .metric-value { font-size: 26px; letter-spacing: -1px; font-weight: 730; margin-top: 13px; }
+    .metric-foot { font-size: 10px; color: var(--muted); margin-top: 5px; }
+    .positive { color: #548454; font-weight: 650; }
+    .negative { color: var(--red); font-weight: 650; }
+    .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, .95fr); gap: 16px; margin-bottom: 16px; }
+    .panel { background: white; border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+    .panel-head { padding: 18px 20px 13px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .panel-title { font-size: 13px; font-weight: 700; }
+    .panel-note { color: var(--muted); font-size: 10px; margin-top: 5px; }
+    .select-mini { border: 1px solid var(--line); border-radius: 6px; color: #657168; background: white; padding: 6px 8px; font-size: 10px; }
+    .chart-wrap { padding: 0 17px 13px; }
+    .chart { width: 100%; height: 180px; display: block; overflow: visible; }
+    .chart-label { fill: #88938a; font-size: 9px; font-family: inherit; }
+    .chart-grid { stroke: #edf0ea; stroke-width: 1; }
+    .chart-area { fill: url(#chartFill); }
+    .chart-line { fill: none; stroke: #527d50; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    .chart-dot { fill: white; stroke: #527d50; stroke-width: 2; }
+    .chart-footer { display: flex; align-items: center; gap: 8px; padding: 3px 6px; color: var(--muted); font-size: 10px; }
+    .legend-dot { width: 7px; height: 7px; border-radius: 50%; background: #648c59; }
+    .health-summary { padding: 0 20px 15px; }
+    .health-total { border-radius: 10px; background: #f3f6ed; display: flex; padding: 15px; align-items: center; justify-content: space-between; margin-bottom: 13px; }
+    .health-total strong { font-size: 22px; letter-spacing: -.5px; }
+    .health-total span { display: block; color: var(--muted); font-size: 10px; margin-top: 3px; }
+    .health-total .big-icon { font-size: 24px; }
+    .flock-mini { padding: 11px 0; border-bottom: 1px solid #eff1ed; }
+    .flock-mini:last-child { border-bottom: 0; }
+    .flock-row { display: flex; justify-content: space-between; align-items: center; }
+    .flock-mini-name { font-size: 11px; font-weight: 650; }
+    .flock-mini-meta { font-size: 10px; color: var(--muted); margin-top: 4px; }
+    .flock-mini-rate { font-size: 11px; font-weight: 700; color: var(--forest); }
+    .progress { height: 4px; border-radius: 8px; background: #eef0ea; margin-top: 9px; overflow: hidden; }
+    .progress span { display: block; height: 100%; background: #7ea06c; border-radius: inherit; }
+    .bottom-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(270px, .8fr); gap: 16px; }
+    .table-wrap { overflow: auto; }
+    table { border-collapse: collapse; width: 100%; text-align: left; }
+    th { font-size: 9px; text-transform: uppercase; letter-spacing: .8px; color: #929b92; font-weight: 700; padding: 10px 19px; border-top: 1px solid #f1f2ef; white-space: nowrap; }
+    td { padding: 12px 19px; border-top: 1px solid #f1f2ef; font-size: 11px; white-space: nowrap; }
+    tbody tr:hover { background: #fbfcf9; }
+    .strong-cell { font-weight: 650; color: #2a382e; }
+    .muted-cell { color: var(--muted); }
+    .badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 20px; padding: 5px 8px; font-size: 9px; font-weight: 650; }
+    .badge.good { color: #4a784c; background: #edf5e9; }
+    .badge.warn { color: #9c6a2a; background: #fbf2df; }
+    .badge.alert { color: #a44f43; background: #faece9; }
+    .badge.neutral { color: #657168; background: #f0f2ed; }
+    .dot-status { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+    .stock-list { padding: 0 20px 13px; }
+    .stock-row { padding: 12px 0; display: flex; align-items: center; gap: 11px; border-top: 1px solid #f1f2ef; }
+    .stock-icon { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: #f3f5ef; font-size: 15px; }
+    .stock-info { flex: 1; min-width: 0; }
+    .stock-name { font-size: 11px; font-weight: 650; }
+    .stock-unit { font-size: 9px; margin-top: 4px; color: var(--muted); }
+    .stock-level { text-align: right; font-size: 11px; font-weight: 700; }
+    .stock-level small { display: block; font-size: 9px; color: var(--muted); font-weight: 400; margin-top: 3px; }
+    .alert-banner { display: flex; gap: 11px; padding: 12px 13px; background: #fbf5e8; border: 1px solid #f1e7ce; border-radius: 9px; margin: 0 20px 17px; }
+    .alert-banner .alert-icon { font-size: 15px; }
+    .alert-banner strong { display: block; font-size: 10px; }
+    .alert-banner p { font-size: 9px; margin: 4px 0 0; color: #7f7561; line-height: 1.5; }
+    .toolbar { display: flex; align-items: center; gap: 9px; }
+    .search { border: 1px solid var(--line); background: white; padding: 9px 11px; border-radius: 8px; width: 205px; font-size: 11px; outline: none; }
+    .search:focus, .field input:focus, .field select:focus, .field textarea:focus { border-color: #7e9e71; box-shadow: 0 0 0 3px rgba(126,158,113,.12); }
+    .list-panel { overflow: hidden; }
+    .list-summary { display: flex; gap: 10px; padding: 0 20px 16px; flex-wrap: wrap; }
+    .summary-chip { font-size: 10px; color: #6d786f; background: #f5f7f2; border-radius: 6px; padding: 7px 9px; }
+    .summary-chip strong { color: var(--forest); margin-right: 4px; }
+    .empty-state { text-align: center; color: var(--muted); padding: 36px 20px; font-size: 12px; }
+    .report-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; margin-bottom: 16px; }
+    .report-card { padding: 18px; background: white; border: 1px solid var(--line); border-radius: 12px; }
+    .report-card .label { font-size: 10px; color: var(--muted); }
+    .report-card .value { font-size: 24px; letter-spacing: -.7px; font-weight: 720; margin-top: 9px; }
+    .report-card .hint { font-size: 10px; color: var(--muted); margin-top: 5px; }
+    .report-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .report-row { display: flex; justify-content: space-between; border-top: 1px solid #f0f2ee; padding: 12px 0; font-size: 11px; }
+    .report-row strong { font-weight: 650; }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(16, 29, 21, .45); z-index: 10; display: grid; place-items: center; padding: 18px; }
+    .modal { width: min(100%, 510px); max-height: min(90vh, 760px); overflow: auto; background: #fff; border-radius: 14px; box-shadow: 0 25px 80px rgba(0,0,0,.2); }
+    .modal-head { padding: 21px 23px 15px; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--line); }
+    .modal-head h2 { font-size: 18px; margin: 0; letter-spacing: -.4px; }
+    .modal-head p { color: var(--muted); font-size: 11px; margin: 6px 0 0; }
+    .close-button { border: 0; background: transparent; color: var(--muted); font-size: 22px; padding: 0 3px; line-height: 1; }
+    .modal-form { padding: 19px 23px 22px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field.full { grid-column: 1 / -1; }
+    .field label { color: #69756b; font-size: 10px; font-weight: 650; }
+    .field input, .field select, .field textarea { border: 1px solid #e3e8e0; border-radius: 7px; padding: 10px; color: var(--ink); background: white; outline: none; font-size: 11px; width: 100%; }
+    .field textarea { resize: vertical; min-height: 68px; }
+    .form-error { color: var(--red); font-size: 10px; margin-top: 10px; min-height: 12px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 17px; }
+    .toast { position: fixed; right: 24px; bottom: 24px; z-index: 15; background: var(--forest); color: white; padding: 12px 16px; border-radius: 9px; font-size: 12px; box-shadow: var(--shadow); animation: appear .2s ease-out; }
+    @keyframes appear { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+    .menu-button { display: none; }
+    @media (max-width: 1050px) {
+      .sidebar { width: 220px; flex-basis: 220px; }
+      .content { padding-left: 25px; padding-right: 25px; }
+      .topbar { padding: 0 25px; }
+      .metrics { grid-template-columns: repeat(2,1fr); }
+      .dashboard-grid, .bottom-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 700px) {
+      .sidebar { position: fixed; z-index: 8; left: -260px; top: 0; bottom: 0; width: 250px; transition: left .2s; box-shadow: 10px 0 30px rgba(0,0,0,.14); }
+      .sidebar.open { left: 0; }
+      .topbar { height: 62px; padding: 0 15px; }
+      .menu-button { display: grid; margin-right: 10px; }
+      .top-left { display: flex; align-items: center; }
+      .mobile-brand { display: block; color: var(--forest); font-weight: 750; font-size: 16px; letter-spacing: -.4px; }
+      .breadcrumb { display: none; }
+      .date-pill { display: none; }
+      .top-actions { gap: 9px; }
+      .content { padding: 25px 15px 35px; }
+      .page-heading { align-items: flex-start; flex-direction: column; }
+      .page-heading .toolbar { width: 100%; }
+      .toolbar .search { flex: 1; width: auto; min-width: 0; }
+      .metrics { gap: 9px; }
+      .metric { min-height: 111px; padding: 13px; }
+      .metric-value { font-size: 22px; }
+      .metric-top { font-size: 10px; }
+      .report-grid { grid-template-columns: 1fr 1fr; gap: 9px; }
+      .report-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
+      .report-columns { grid-template-columns: 1fr; }
+      .chart { height: 155px; }
+      .table-wrap { margin: 0 -2px; }
+      th, td { padding-left: 13px; padding-right: 13px; }
+      .list-summary { padding-left: 14px; padding-right: 14px; }
+      .panel-head { padding-left: 15px; padding-right: 15px; }
+    }
+    @media (max-width: 410px) {
+      .button { padding: 10px 11px; font-size: 11px; }
+      .metric-icon { width: 27px; height: 27px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .field.full { grid-column: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20c0-5.2 1.9-9.2 7-12"/><path d="M5 9c4.8 0 7 2.5 7 7"/><path d="M4 5c3.5-.2 6.2 1.2 8 4"/><path d="M12 20c-4.3 0-7-2.1-7-6"/></svg>
+        </div>
+        <div><div class="brand-name">Fieldnote</div><div class="brand-caption">Farm, in good order</div></div>
+      </div>
+      <div class="nav-label">Workspace</div>
+      <nav class="nav-list" aria-label="Main navigation">
+        <button class="nav-item active" data-page="dashboard"><span class="nav-icon">⌂</span>Overview</button>
+        <button class="nav-item" data-page="flocks"><span class="nav-icon">♧</span>Flocks <span class="nav-count" id="flock-count">0</span></button>
+        <button class="nav-item" data-page="production"><span class="nav-icon">◉</span>Egg production</button>
+        <button class="nav-item" data-page="sales"><span class="nav-icon">↗</span>Egg sales</button>
+        <button class="nav-item" data-page="inventory"><span class="nav-icon">▤</span>Feed & inventory</button>
+        <button class="nav-item" data-page="health"><span class="nav-icon">♡</span>Health & care</button>
+        <button class="nav-item" data-page="finance"><span class="nav-icon">＄</span>Expenses & profit</button>
+        <button class="nav-item" data-page="reports"><span class="nav-icon">▥</span>Reports</button>
+      </nav>
+      <div class="side-bottom">
+        <div class="farm-card"><div class="farm-overline">Your workspace</div><div class="farm-name">Lucea's Poultry Farm</div><div class="farm-location">Layer farm · Local workspace</div></div>
+        <div class="profile"><div class="avatar">LP</div><div><div class="profile-name">Farm manager</div><div class="profile-role">Administrator</div></div></div>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div class="top-left">
+          <button class="icon-button menu-button" id="menu-button" aria-label="Open navigation">☰</button>
+          <div class="mobile-brand">Fieldnote</div>
+          <div class="breadcrumb">Farm management <span style="padding:0 7px;color:#c3c9c2">/</span><strong id="crumb">Overview</strong></div>
+        </div>
+        <div class="top-actions">
+          <div class="date-pill"><span>◷</span><span id="today-label"></span></div>
+          <button class="button secondary small" id="currency-button" title="Change farm currency">NGN</button>
+          <button class="icon-button" id="alerts-button" aria-label="View inventory alerts">♧<span class="dot"></span></button>
+        </div>
+      </header>
+      <section class="content" id="content" aria-live="polite"></section>
+    </main>
+  </div>
+  <div id="overlay-root"></div>
+  <script>
+    (() => {
+      "use strict";
+      const STORAGE_KEY = "fieldnote-poultry-v1";
+      const today = new Date();
+      const dateISO = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      const daysAgo = (days) => { const date = new Date(); date.setDate(date.getDate() - days); return dateISO(date); };
+      const initialState = () => ({
+        flocks: [],
+        collections: [],
+        sales: [],
+        otherIncome: [],
+        inventory: [],
+        health: [],
+        expenses: [],
+        feedings: [],
+        currency: "NGN"
+      });
+      let state;
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        state = saved ? JSON.parse(saved) : initialState();
+        if (saved && state.resetForFreshStart !== true) {
+          state = initialState();
+          state.resetForFreshStart = true;
+        }
+        ["flocks","collections","sales","otherIncome","inventory","health","expenses","feedings"].forEach((key) => { if (!Array.isArray(state[key])) state[key] = []; });
+        if (typeof state.currency !== "string" || state.currency === "USD") state.currency = "NGN";
+      } catch (error) {
+        console.error("Could not load saved farm data:", error);
+        state = initialState();
+      }
+      let currentPage = "dashboard";
+      let searchTerm = "";
+      const $ = (selector, root = document) => root.querySelector(selector);
+      const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      const number = (value) => Number(value) || 0;
+      const money = (value) => new Intl.NumberFormat(state.currency === "NGN" ? "en-NG" : undefined, { style: "currency", currency: state.currency || "NGN", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(number(value));
+      const num = (value) => new Intl.NumberFormat().format(number(value));
+      const prettyDate = (date) => date ? new Date(date + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—";
+      const nameOf = (id) => state.flocks.find((flock) => flock.id === id)?.name || "Unassigned flock";
+      const persist = () => {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+        catch (error) { console.error("Could not save farm data:", error); toast("Unable to save. Check browser storage."); }
+      };
+      const flockBirds = () => state.flocks.filter((f) => f.status !== "Culled").reduce((sum, f) => sum + number(f.birds), 0);
+      const productionOn = (date) => state.collections.filter((c) => c.date === date).reduce((sum, c) => sum + number(c.trays), 0);
+      const totalProduced = () => state.collections.reduce((sum, c) => sum + number(c.trays), 0);
+      const soldTrays = () => state.sales.reduce((sum, s) => sum + number(s.trays), 0);
+      const stockEggs = () => Math.max(0, totalProduced() - soldTrays());
+      const flockEggStock = (flockId, grade) => Math.max(0,
+        state.collections.filter((c) => c.flockId === flockId && c.grade === grade).reduce((sum, c) => sum + number(c.trays), 0) -
+        state.sales.filter((s) => s.flockId === flockId && s.grade === grade).reduce((sum, s) => sum + number(s.trays), 0));
+      const withdrawalEnd = (record) => {
+        const end = new Date(`${record.date}T12:00:00`);
+        end.setDate(end.getDate() + number(record.withdrawal));
+        return dateISO(end);
+      };
+      const isWithdrawalActive = (record) => number(record.withdrawal) > 0 && withdrawalEnd(record) >= dateISO(today);
+      const flockWithdrawal = (flockId) => state.health.find((record) => record.flockId === flockId && isWithdrawalActive(record));
+      const salesRevenue = () => state.sales.reduce((sum, s) => sum + number(s.trays) * number(s.price), 0);
+      const otherIncomeTotal = () => state.otherIncome.reduce((sum, item) => sum + number(item.amount), 0);
+      const totalRevenue = () => salesRevenue() + otherIncomeTotal();
+      const expenseTotal = () => state.expenses.reduce((sum, e) => sum + number(e.amount), 0);
+      const paidRevenue = () => state.sales.filter((s) => s.paid).reduce((sum, s) => sum + number(s.trays) * number(s.price), 0);
+      const activeFlocks = () => state.flocks.filter((f) => f.status !== "Culled");
+      const flockAgeWeeks = (flock) => Math.max(0, number(flock.ageWeeksAtPurchase) + (new Date(`${dateISO(today)}T12:00:00`) - new Date(`${flock.purchased}T12:00:00`)) / 604800000);
+      const rateFor = (flock) => {
+        if (!number(flock.birds)) return 0;
+        const rows = state.collections.filter((c) => c.flockId === flock.id && c.date >= daysAgo(6));
+        const trays = rows.reduce((sum, c) => sum + number(c.trays), 0);
+        const collectionDays = new Set(rows.map((c) => c.date)).size || 1;
+        return Math.round((trays * 30 / collectionDays) / number(flock.birds) * 100);
+      };
+      const badge = (text, kind = "neutral") => `<span class="badge ${kind}"><span class="dot-status"></span>${esc(text)}</span>`;
+      const heading = (eyebrow, title, subtitle, action) => `<div class="page-heading"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p class="subtitle">${subtitle}</p></div>${action || ""}</div>`;
+      const metric = (label, value, icon, foot, iconColor = "") => `<article class="metric"><div class="metric-top"><span>${label}</span><span class="metric-icon" style="${iconColor}">${icon}</span></div><div class="metric-value">${value}</div><div class="metric-foot">${foot}</div></article>`;
+      const empty = (message) => `<tr><td class="empty-state" colspan="8">${message}</td></tr>`;
+      const iconForCategory = (category) => category === "Feed" ? "♧" : category === "Medicine" ? "♡" : category === "Packaging" ? "▤" : "◈";
+      const remainingDays = (item) => item.category === "Feed" && number(item.quantity) ? Math.max(1, Math.floor(number(item.quantity) / (flockBirds() * .15 || 1))) : null;
+
+      function chartSvg() {
+        const labels = Array.from({ length: 7 }, (_, index) => daysAgo(6 - index));
+        const values = labels.map((date) => productionOn(date));
+        const max = Math.max(10, ...values) * 1.25;
+        const left = 32, right = 475, top = 14, bottom = 145;
+        const points = values.map((value, i) => ({ x: left + (right - left) * i / 6, y: bottom - (value / max) * (bottom - top) }));
+        const line = points.map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" ");
+        const area = `${line} L${right},${bottom} L${left},${bottom} Z`;
+        const guides = [0, .5, 1].map((fraction) => {
+          const y = bottom - fraction * (bottom - top);
+          return `<line x1="${left}" y1="${y}" x2="${right}" y2="${y}" class="chart-grid"/><text x="0" y="${y + 3}" class="chart-label">${Math.round(max * fraction)}</text>`;
+        }).join("");
+        const dots = points.map((p) => `<circle cx="${p.x}" cy="${p.y}" r="3.5" class="chart-dot"/>`).join("");
+        const dayLabels = labels.map((date, i) => `<text x="${points[i].x}" y="167" text-anchor="middle" class="chart-label">${new Date(date + "T12:00:00").toLocaleDateString(undefined, { weekday: "short" })}</text>`).join("");
+        return `<svg class="chart" viewBox="0 0 490 180" role="img" aria-label="Egg production over the last seven days">${guides}<defs><linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#95b380" stop-opacity=".28"/><stop offset="1" stop-color="#95b380" stop-opacity="0"/></linearGradient></defs><path d="${area}" class="chart-area"/><path d="${line}" class="chart-line"/>${dots}${dayLabels}</svg>`;
+      }
+      function renderDashboard() {
+        const todayProduction = productionOn(dateISO(today));
+        const weekProduction = state.collections.filter((c) => c.date >= daysAgo(6)).reduce((sum, c) => sum + number(c.trays), 0);
+        const alerts = state.inventory.filter((item) => number(item.quantity) <= number(item.threshold));
+        const active = activeFlocks();
+        const flockRows = active.map((flock) => {
+          const rate = rateFor(flock);
+          return `<div class="flock-mini"><div class="flock-row"><div><div class="flock-mini-name">${esc(flock.name)}</div><div class="flock-mini-meta">${num(flock.birds)} birds · ${esc(flock.status)}</div></div><div class="flock-mini-rate">${rate}% <span style="font-weight:400;color:#879087">lay rate</span></div></div><div class="progress"><span style="width:${Math.min(100, rate)}%"></span></div></div>`;
+        }).join("");
+        const recent = [...state.sales].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
+        const salesRows = recent.length ? recent.map((sale) => `<tr><td class="strong-cell">${esc(sale.customer)}</td><td>${prettyDate(sale.date)}</td><td>${num(sale.trays)} trays</td><td class="strong-cell">${money(number(sale.trays) * number(sale.price))}</td><td>${badge(sale.paid ? "Paid" : "Unpaid", sale.paid ? "good" : "warn")}</td></tr>`).join("") : empty("No egg sales recorded yet.");
+        const stockRows = state.inventory.slice(0, 4).map((item) => `<div class="stock-row"><div class="stock-icon">${iconForCategory(item.category)}</div><div class="stock-info"><div class="stock-name">${esc(item.name)}</div><div class="stock-unit">${esc(item.category)} · ${esc(item.unit)}</div></div><div class="stock-level">${num(item.quantity)}<small>${item.threshold ? `Reorder at ${num(item.threshold)}` : "in stock"}</small></div></div>`).join("");
+        return `${heading(`${today.toLocaleDateString(undefined, { weekday: "long" })}, on the farm`, "Good morning, manager", "Here’s how your flock and egg business are doing today.", `<button class="button" data-action="log-production"><span>＋</span> Log today's eggs</button>`)}
+          <div class="metrics">
+            ${metric("Active layers", num(flockBirds()), "♧", `<span class="positive">${active.length} active flocks</span> · across your farm`)}
+            ${metric("Eggs collected today", `${num(todayProduction)} <span style="font-size:13px;font-weight:550;letter-spacing:0">trays</span>`, "◉", `<span class="positive">${num(todayProduction * 30)} eggs</span> collected today`)}
+            ${metric("Eggs ready to sell", `${num(stockEggs())} <span style="font-size:13px;font-weight:550;letter-spacing:0">trays</span>`, "▤", `${num(stockEggs() * 30)} eggs · ${money(paidRevenue())} cash received`)}
+            ${metric("Egg sales · all time", money(salesRevenue()), "↗", `${money(expenseTotal())} recorded expenses · ${money(totalRevenue() - expenseTotal())} net incl. other income`)}
+          </div>
+          <div class="dashboard-grid">
+            <section class="panel"><div class="panel-head"><div><div class="panel-title">Egg production</div><div class="panel-note">Collection by day · trays (30 eggs per tray)</div></div><button class="button secondary small" data-page-link="production">View log ↗</button></div><div class="chart-wrap">${chartSvg()}<div class="chart-footer"><span class="legend-dot"></span>Collected eggs <span style="margin-left:auto">${num(weekProduction)} trays this week</span></div></div></section>
+            <section class="panel"><div class="panel-head"><div><div class="panel-title">Flock health</div><div class="panel-note">Current laying performance</div></div><button class="button secondary small" data-page-link="flocks">All flocks</button></div><div class="health-summary"><div class="health-total"><div><strong>${num(active.length)}</strong><span>active flocks</span></div><div class="big-icon">🐓</div></div>${flockRows || `<div class="empty-state">Add your first flock to get started.</div>`}</div></section>
+          </div>
+          <div class="bottom-grid">
+            <section class="panel"><div class="panel-head"><div><div class="panel-title">Recent egg sales</div><div class="panel-note">Your latest customer orders and payments</div></div><button class="button secondary small" data-page-link="sales">All sales ↗</button></div><div class="table-wrap"><table><thead><tr><th>Customer</th><th>Date</th><th>Quantity</th><th>Total</th><th>Payment</th></tr></thead><tbody>${salesRows}</tbody></table></div></section>
+            <section class="panel"><div class="panel-head"><div><div class="panel-title">Stock at a glance</div><div class="panel-note">Feed, medicine and packaging</div></div><button class="button secondary small" data-page-link="inventory">Inventory</button></div><div class="stock-list">${stockRows || `<div class="empty-state">No stock items recorded.</div>`}</div>${alerts.length ? `<div class="alert-banner"><span class="alert-icon">⚠</span><div><strong>${alerts.length} stock item${alerts.length === 1 ? "" : "s"} need attention</strong><p>${esc(alerts.map((item) => item.name).join(", "))} ${alerts.length === 1 ? "is" : "are"} at or below reorder level.</p></div></div>` : ""}</section>
+          </div>`;
+      }
+      function filterRows(rows, fields) {
+        const query = searchTerm.trim().toLowerCase();
+        return query ? rows.filter((row) => fields.some((field) => String(row[field] ?? "").toLowerCase().includes(query))) : rows;
+      }
+      function renderFlocks() {
+        const rows = filterRows(state.flocks, ["name","breed","status"]);
+        const laying = state.flocks.filter((f) => f.status === "Laying").length;
+        const birds = flockBirds();
+        const table = rows.length ? rows.map((f) => `<tr><td class="strong-cell">${esc(f.name)}<div class="muted-cell" style="font-size:9px;margin-top:4px">${esc(f.breed)}</div></td><td>${prettyDate(f.purchased)}</td><td>${f.ageWeeksAtPurchase === undefined ? "—" : `${Math.floor(flockAgeWeeks(f))} wk`}</td><td>${num(f.initialBirds)}</td><td class="strong-cell">${num(f.birds)} <span class="muted-cell" style="font-weight:400">alive</span></td><td>${num(Math.max(0, number(f.initialBirds) - number(f.birds)))}</td><td>${rateFor(f)}%</td><td>${badge(f.status, f.status === "Laying" ? "good" : f.status === "Growing" ? "warn" : "neutral")}</td><td><button class="button secondary small" data-action="edit-flock" data-id="${esc(f.id)}">Edit</button></td></tr>`).join("") : empty(searchTerm ? "No flocks match your search." : "No flocks yet. Add your first flock to begin tracking.");
+        return `${heading("Your birds", "Flock management", "Track each batch from purchase through laying, replacement and end of lay.", `<button class="button" data-action="add-flock"><span>＋</span> Add a flock</button>`)}
+          <div class="metrics">${metric("Birds on farm", num(birds), "♧", `${state.flocks.length} flocks recorded`)}${metric("Laying flocks", num(laying), "◉", "Currently producing eggs")}${metric("Eggs collected", `${num(totalProduced())} trays`, "▤", `${num(stockEggs())} trays still available`)}${metric("Birds lost", num(state.flocks.reduce((s,f) => s + Math.max(0, number(f.initialBirds) - number(f.birds)), 0)), "♡", "Based on initial flock count")}</div>
+          <section class="panel list-panel"><div class="panel-head"><div><div class="panel-title">All flocks</div><div class="panel-note">Purchase value, age, bird count and stage are kept for each batch</div></div><input class="search" data-search placeholder="Search flock or breed…" value="${esc(searchTerm)}"></div><div class="list-summary"><span class="summary-chip"><strong>${state.flocks.length}</strong>total flocks</span><span class="summary-chip"><strong>${num(birds)}</strong>active birds</span><span class="summary-chip"><strong>${laying}</strong>currently laying</span></div><div class="table-wrap"><table><thead><tr><th>Flock / breed</th><th>Purchased</th><th>Age</th><th>Started with</th><th>Current count</th><th>Losses</th><th>Lay rate</th><th>Status</th><th></th></tr></thead><tbody>${table}</tbody></table></div></section>`;
+      }
+      function renderProduction() {
+        const rows = filterRows([...state.collections].sort((a,b) => b.date.localeCompare(a.date)), ["date","grade"]);
+        const todayTotal = productionOn(dateISO(today));
+        const rejected = state.collections.reduce((sum,c) => sum + number(c.rejected), 0);
+        const body = rows.length ? rows.map((c) => `<tr><td>${prettyDate(c.date)}</td><td class="strong-cell">${esc(nameOf(c.flockId))}</td><td>${esc(c.grade)}</td><td class="strong-cell">${num(c.trays)} trays</td><td>${num(number(c.trays) * 30)} eggs</td><td>${num(c.rejected)}</td></tr>`).join("") : empty("No egg collections found.");
+        return `${heading("The daily rhythm", "Egg production", "Log collections by flock and grade. One tray holds 30 eggs.", `<button class="button" data-action="log-production"><span>＋</span> Log collection</button>`)}
+          <div class="metrics">${metric("Today's collection", `${num(todayTotal)} trays`, "◉", `${num(todayTotal * 30)} eggs`)}${metric("Total collected", `${num(totalProduced())} trays`, "▤", "Across all recorded collections")}${metric("Available to sell", `${num(stockEggs())} trays`, "↗", "Collections less recorded sales")}${metric("Rejected / cracked", num(rejected), "⚠", "Eggs set aside from sale")}</div>
+          <section class="panel list-panel"><div class="panel-head"><div><div class="panel-title">Collection log</div><div class="panel-note">Daily egg collection records by flock</div></div><input class="search" data-search placeholder="Search grade or date…" value="${esc(searchTerm)}"></div><div class="list-summary"><span class="summary-chip"><strong>${num(todayTotal)}</strong>trays today</span><span class="summary-chip"><strong>${num(stockEggs())}</strong>trays available</span><span class="summary-chip"><strong>30</strong>eggs per tray</span></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Flock</th><th>Grade</th><th>Collected</th><th>Egg count</th><th>Rejected</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
+      }
+      function renderSales() {
+        const rows = filterRows([...state.sales].sort((a,b) => b.date.localeCompare(a.date)), ["customer","date","grade"]);
+        const unpaid = state.sales.filter((s) => !s.paid).reduce((sum,s) => sum + number(s.trays) * number(s.price), 0);
+        const body = rows.length ? rows.map((s) => `<tr><td class="strong-cell">${esc(s.customer)}</td><td>${prettyDate(s.date)}</td><td>${esc(nameOf(s.flockId))}</td><td>${esc(s.grade)}</td><td>${num(s.trays)} trays</td><td>${money(s.price)} / tray</td><td class="strong-cell">${money(number(s.trays) * number(s.price))}</td><td>${badge(s.paid ? "Paid" : "Unpaid", s.paid ? "good" : "warn")}</td><td>${s.paid ? "" : `<button class="button secondary small" data-action="mark-paid" data-id="${esc(s.id)}">Mark paid</button>`}</td></tr>`).join("") : empty("No sales found. Record your first egg sale.");
+        return `${heading("From farm to customer", "Egg sales", "Record buyers, quantities, prices and payment status. Sales reduce eggs available for sale.", `<button class="button" data-action="add-sale"><span>＋</span> Record a sale</button>`)}
+          <div class="metrics">${metric("Sales revenue", money(salesRevenue()), "↗", "Value of all recorded sales")}${metric("Cash received", money(paidRevenue()), "＄", "Sales marked as paid")}${metric("Awaiting payment", money(unpaid), "◷", `${state.sales.filter((s) => !s.paid).length} unpaid orders`)}${metric("Trays sold", num(soldTrays()), "▤", `${num(stockEggs())} trays remaining` )}</div>
+          <section class="panel list-panel"><div class="panel-head"><div><div class="panel-title">Sales ledger</div><div class="panel-note">Customer orders and outstanding balances</div></div><input class="search" data-search placeholder="Search customer…" value="${esc(searchTerm)}"></div><div class="list-summary"><span class="summary-chip"><strong>${state.sales.length}</strong>orders</span><span class="summary-chip"><strong>${money(unpaid)}</strong>outstanding</span><span class="summary-chip"><strong>${num(stockEggs())}</strong>trays in stock</span></div><div class="table-wrap"><table><thead><tr><th>Customer</th><th>Date</th><th>Flock</th><th>Grade</th><th>Quantity</th><th>Price</th><th>Total</th><th>Payment</th><th></th></tr></thead><tbody>${body}</tbody></table></div></section>`;
+      }
+      function renderInventory() {
+        const rows = filterRows(state.inventory, ["name","category","unit"]);
+        const low = state.inventory.filter((item) => number(item.quantity) <= number(item.threshold));
+        const body = rows.length ? rows.map((item) => {
+          const days = remainingDays(item);
+            return `<tr><td><span style="margin-right:8px">${iconForCategory(item.category)}</span><span class="strong-cell">${esc(item.name)}</span></td><td>${esc(item.category)}</td><td class="strong-cell">${num(item.quantity)} ${esc(item.unit)}</td><td>${num(item.threshold)} ${esc(item.unit)}</td><td>${money(item.cost)} / ${esc(item.unit)}</td><td>${days ? `~${days} days` : item.expiry ? prettyDate(item.expiry) : "—"}</td><td>${badge(number(item.quantity) <= number(item.threshold) ? "Reorder" : "In stock", number(item.quantity) <= number(item.threshold) ? "warn" : "good")}</td><td><button class="button secondary small" data-action="restock" data-id="${esc(item.id)}">Restock</button></td></tr>`;
+        }).join("") : empty("No stock items found.");
+        const feedRows = [...state.feedings].sort((a,b) => b.date.localeCompare(a.date)).map((feeding) => {
+          const item = state.inventory.find((i) => i.id === feeding.itemId);
+          return `<tr><td>${prettyDate(feeding.date)}</td><td class="strong-cell">${esc(nameOf(feeding.flockId))}</td><td>${esc(item?.name || "Removed feed item")}</td><td>${num(feeding.quantity)} kg</td></tr>`;
+        }).join("") || empty("No feed issues recorded yet.");
+        return `${heading("Keep essentials on hand", "Feed & inventory", "Track feed, medicines and packaging, manage reorder levels and log daily feed use.", `<div class="toolbar"><button class="button secondary" data-action="log-feed">↓ Issue feed</button><button class="button" data-action="add-stock"><span>＋</span> Add stock</button></div>`)}
+          <div class="metrics">${metric("Stock items", num(state.inventory.length), "▤", "Feed, medicine & packaging")}${metric("Low-stock items", num(low.length), "⚠", low.length ? "Below reorder threshold" : "All stock above reorder level")}${metric("Feed on hand", `${num(state.inventory.filter((i) => i.category === "Feed").reduce((s,i) => s + number(i.quantity),0))} kg`, "♧", "Across all feed types")}${metric("Feed issued", `${num(state.feedings.reduce((s,f) => s + number(f.quantity),0))} kg`, "↓", "Total recorded usage")}</div>
+          <section class="panel list-panel"><div class="panel-head"><div><div class="panel-title">Stock register</div><div class="panel-note">A low-stock alert appears when quantity reaches the reorder level</div></div><input class="search" data-search placeholder="Search inventory…" value="${esc(searchTerm)}"></div><div class="list-summary">${low.length ? `<span class="summary-chip"><strong>${low.length}</strong>need reordering</span>` : `<span class="summary-chip"><strong>All good</strong>stock levels healthy</span>`}<span class="summary-chip"><strong>${state.feedings.length}</strong>feed issues logged</span></div><div class="table-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>On hand</th><th>Reorder at</th><th>Unit cost</th><th>Feed cover / expiry</th><th>Status</th><th></th></tr></thead><tbody>${body}</tbody></table></div></section>
+          <section class="panel list-panel" style="margin-top:16px"><div class="panel-head"><div><div class="panel-title">Feed issue log</div><div class="panel-note">Feed quantity issued to each flock over time</div></div></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Flock</th><th>Feed</th><th>Quantity</th></tr></thead><tbody>${feedRows}</tbody></table></div></section>`;
+      }
+      function renderHealth() {
+        const rows = filterRows([...state.health].sort((a,b) => b.date.localeCompare(a.date)), ["type","item","notes"]);
+        const body = rows.length ? rows.map((h) => `<tr><td>${prettyDate(h.date)}</td><td class="strong-cell">${esc(nameOf(h.flockId))}</td><td>${badge(h.type, h.type === "Treatment" ? "warn" : "good")}</td><td class="strong-cell">${esc(h.item)}</td><td class="muted-cell">${esc(h.notes || "—")}</td><td>${number(h.birdsLost) || "—"}</td><td>${h.withdrawal ? isWithdrawalActive(h) ? `Active · through ${prettyDate(withdrawalEnd(h))}` : `${h.withdrawal} days · complete` : "—"}</td></tr>`).join("") : empty("No health records found.");
+        return `${heading("Healthy birds, steady laying", "Health & care", "Keep vaccination and treatment history for every flock. Always follow veterinary advice and medicine labels.", `<button class="button" data-action="add-health"><span>＋</span> Log health record</button>`)}
+          <div class="metrics">${metric("Care records", num(state.health.length), "♡", "Vaccinations and treatments")}${metric("Vaccinations", num(state.health.filter((h) => h.type === "Vaccination").length), "✚", "Recorded in the health log")}${metric("Treatments", num(state.health.filter((h) => h.type === "Treatment").length), "＋", "Follow your vet's guidance")}${metric("Active withdrawals", num(state.health.filter(isWithdrawalActive).length), "◷", "Affected flock sales are blocked")}</div>
+          <section class="panel list-panel"><div class="panel-head"><div><div class="panel-title">Health register</div><div class="panel-note">Active egg withdrawal periods prevent sales from the affected flock</div></div><input class="search" data-search placeholder="Search records…" value="${esc(searchTerm)}"></div><div class="list-summary"><span class="summary-chip"><strong>${state.health.length}</strong>health records</span><span class="summary-chip"><strong>${state.health.filter((h) => h.type === "Vaccination").length}</strong>vaccinations</span><span class="summary-chip"><strong>${state.health.filter((h) => h.type === "Treatment").length}</strong>treatments</span><span class="summary-chip"><strong>${state.health.filter(isWithdrawalActive).length}</strong>active withdrawals</span></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Flock</th><th>Type</th><th>Treatment / vaccine</th><th>Notes</th><th>Birds lost</th><th>Withdrawal</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
+      }
+      function renderFinance() {
+        const categories = [...new Set(state.expenses.map((e) => e.category))];
+        const expenseRows = categories.map((category) => {
+          const amount = state.expenses.filter((e) => e.category === category).reduce((sum,e) => sum + number(e.amount), 0);
+          return `<div class="report-row"><span>${esc(category)}</span><strong>${money(amount)}</strong></div>`;
+        }).join("") || `<div class="empty-state">No expenses recorded.</div>`;
+        const recent = [...state.expenses].sort((a,b) => b.date.localeCompare(a.date));
+        const body = recent.length ? recent.map((e) => `<tr><td>${prettyDate(e.date)}</td><td class="strong-cell">${esc(e.description)}</td><td>${esc(e.category)}</td><td>${esc(e.flockId ? nameOf(e.flockId) : "Farm-wide")}</td><td class="strong-cell">${money(e.amount)}</td></tr>`).join("") : empty("No expenses found.");
+        const otherRows = [...state.otherIncome].sort((a,b) => b.date.localeCompare(a.date));
+        const incomeBody = otherRows.length ? otherRows.map((income) => `<tr><td>${prettyDate(income.date)}</td><td class="strong-cell">${esc(income.description)}</td><td>${esc(income.category)}</td><td>${esc(income.flockId ? nameOf(income.flockId) : "Farm-wide")}</td><td class="strong-cell">${money(income.amount)}</td><td>${badge(income.paid ? "Received" : "Unpaid", income.paid ? "good" : "warn")}</td><td>${income.paid ? "" : `<button class="button secondary small" data-action="mark-income-paid" data-id="${esc(income.id)}">Mark paid</button>`}</td></tr>`).join("") : empty("No other farm income recorded.");
+        const net = totalRevenue() - expenseTotal();
+        const unpaidRevenue = salesRevenue() - paidRevenue() + state.otherIncome.filter((i) => !i.paid).reduce((sum,i) => sum + number(i.amount),0);
+        const paidFarmIncome = paidRevenue() + state.otherIncome.filter((i) => i.paid).reduce((sum,i) => sum + number(i.amount),0);
+        return `${heading("Know what your farm earns", "Expenses & profit", "Track egg sales, spent-hen or manure income, and the costs of keeping each flock.", `<div class="toolbar"><button class="button secondary" data-action="add-expense">＋ Record expense</button><button class="button" data-action="add-income">＋ Other income</button></div>`)}
+          <div class="metrics">${metric("Egg sales revenue", money(salesRevenue()), "↗", "All recorded egg sales")}${metric("Other farm income", money(otherIncomeTotal()), "＋", "Spent hens, manure and other income")}${metric("Recorded expenses", money(expenseTotal()), "＄", "Stock purchases, feed and operating costs")}${metric("Net recorded", money(net), net >= 0 ? "↗" : "↓", "Total revenue less expenses", net < 0 ? "color:#faece9" : "")}</div>
+          <div class="report-columns"><section class="panel"><div class="panel-head"><div><div class="panel-title">Costs by category</div><div class="panel-note">Based on all expenses entered</div></div></div><div style="padding:0 20px 14px">${expenseRows}<div class="report-row" style="border-top:1px solid #dfe5dc"><strong>Total expenses</strong><strong>${money(expenseTotal())}</strong></div></div></section>
+          <section class="panel"><div class="panel-head"><div><div class="panel-title">Profit snapshot</div><div class="panel-note">Simple management view · not an accounting statement</div></div></div><div style="padding:0 20px 14px"><div class="report-row"><span>Egg sales</span><strong>${money(salesRevenue())}</strong></div><div class="report-row"><span>Other farm income</span><strong>${money(otherIncomeTotal())}</strong></div><div class="report-row"><span>Recorded expenses</span><strong>− ${money(expenseTotal())}</strong></div><div class="report-row" style="border-top:1px solid #dfe5dc"><strong>Net recorded</strong><strong>${money(net)}</strong></div><div class="report-row"><span>Cash received</span><strong>${money(paidFarmIncome)}</strong></div><div class="report-row"><span>Still unpaid</span><strong>${money(unpaidRevenue)}</strong></div><div class="alert-banner" style="margin:12px 0 0"><span class="alert-icon">ⓘ</span><div><strong>Include all costs for a useful estimate</strong><p>Bird purchases, feed, labor, transport, utilities and other costs only count after you record them. Stock purchases are expensed when added; feed issuance only tracks usage.</p></div></div></div></section></div>
+          <section class="panel list-panel" style="margin-top:16px"><div class="panel-head"><div><div class="panel-title">Other farm income</div><div class="panel-note">Record spent-hen and manure sales separately from egg revenue</div></div></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Assigned to</th><th>Amount</th><th>Payment</th><th></th></tr></thead><tbody>${incomeBody}</tbody></table></div></section>
+          <section class="panel list-panel" style="margin-top:16px"><div class="panel-head"><div><div class="panel-title">Expense ledger</div><div class="panel-note">Costs can be assigned to a flock or kept farm-wide</div></div></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Assigned to</th><th>Amount</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
+      }
+      function renderReports() {
+        const birds = flockBirds();
+        const collectionDays = new Set(state.collections.map((c) => c.date)).size;
+        const average = collectionDays ? totalProduced() / collectionDays : 0;
+        const feedCost = state.expenses.filter((e) => e.category === "Feed").reduce((s,e) => s + number(e.amount), 0);
+        const topFlock = activeFlocks().map((f) => ({ name: f.name, trays: state.collections.filter((c) => c.flockId === f.id).reduce((s,c) => s + number(c.trays),0), rate: rateFor(f) })).sort((a,b) => b.trays - a.trays);
+        return `${heading("Decide what's next", "Farm reports", "A quick view of production, sales, costs and flock performance from the records you have entered.", `<button class="button secondary" data-action="export-data">↓ Export farm data</button>`)}
+          <div class="report-grid">${metric("Average production", `${average.toFixed(1)} trays`, "◉", `${collectionDays} collection days recorded`)}${metric("Lay rate · active birds", `${birds ? Math.round(totalProduced() * 30 / Math.max(collectionDays,1) / birds * 100) : 0}%`, "♧", "Estimated from recorded collections")}${metric("Feed costs entered", money(feedCost), "▤", "Expenses categorized as feed")}</div>
+          <div class="report-columns"><section class="panel"><div class="panel-head"><div><div class="panel-title">Flock performance</div><div class="panel-note">Historical trays collected by flock</div></div></div><div style="padding:0 20px 14px">${topFlock.length ? topFlock.map((f) => `<div class="report-row"><span>${esc(f.name)} <span class="muted-cell">· ${f.rate}% lay rate</span></span><strong>${num(f.trays)} trays</strong></div>`).join("") : `<div class="empty-state">Add flocks and collection records to see performance.</div>`}</div></section>
+          <section class="panel"><div class="panel-head"><div><div class="panel-title">Business snapshot</div><div class="panel-note">Cumulative totals from recorded activity</div></div></div><div style="padding:0 20px 14px"><div class="report-row"><span>Eggs collected</span><strong>${num(totalProduced())} trays</strong></div><div class="report-row"><span>Eggs sold</span><strong>${num(soldTrays())} trays</strong></div><div class="report-row"><span>Available for sale</span><strong>${num(stockEggs())} trays</strong></div><div class="report-row"><span>Egg sales revenue</span><strong>${money(salesRevenue())}</strong></div><div class="report-row"><span>Other farm income</span><strong>${money(otherIncomeTotal())}</strong></div><div class="report-row"><span>Expenses entered</span><strong>${money(expenseTotal())}</strong></div></div></section></div>
+          <section class="panel" style="margin-top:16px"><div class="panel-head"><div><div class="panel-title">Plan your next flock</div><div class="panel-note">Use a gradual replacement plan to maintain production as older birds decline</div></div><button class="button secondary small" data-page-link="flocks">Manage flocks ↗</button></div><div style="padding:0 20px 17px;font-size:11px;line-height:1.75;color:#667168">Compare each flock's laying trend and health records over time. Add a replacement batch before older flocks leave production, and record end-of-lay sales or culling as farm transactions. This app's estimates are based only on the data you enter; confirm flock and animal-health decisions with a qualified poultry adviser or veterinarian.</div></section>`;
+      }
+      const pageRenderers = { dashboard: renderDashboard, flocks: renderFlocks, production: renderProduction, sales: renderSales, inventory: renderInventory, health: renderHealth, finance: renderFinance, reports: renderReports };
+      const pageInfo = { dashboard: ["Overview","Farm overview"], flocks: ["Flocks","Flock management"], production: ["Egg production","Daily egg collection"], sales: ["Egg sales","Sales ledger"], inventory: ["Feed & inventory","Stock management"], health: ["Health & care","Health register"], finance: ["Expenses & profit","Farm finances"], reports: ["Reports","Farm reports"] };
+      function render() {
+        $("#content").innerHTML = (pageRenderers[currentPage] || renderDashboard)();
+        $("#crumb").textContent = pageInfo[currentPage]?.[0] || "Overview";
+        $("#flock-count").textContent = state.flocks.length;
+        document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.page === currentPage));
+        $("#today-label").textContent = today.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+      }
+      let toastTimer;
+      function toast(message) {
+        document.querySelector(".toast")?.remove();
+        const el = document.createElement("div");
+        el.className = "toast";
+        el.textContent = message;
+        document.body.append(el);
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.remove(), 2800);
+      }
+      function field(name, label, type = "text", options = {}) {
+        const required = options.required === false ? "" : "required";
+        const full = options.full ? " full" : "";
+        let control;
+        if (type === "select") {
+          const optionHtml = (options.options || []).map((o) => `<option value="${esc(o.value)}" ${String(options.value ?? "") === String(o.value) ? "selected" : ""}>${esc(o.label)}</option>`).join("");
+          control = `<select name="${esc(name)}" ${required}>${optionHtml}</select>`;
+        } else if (type === "textarea") {
+          control = `<textarea name="${esc(name)}" placeholder="${esc(options.placeholder || "")}" ${required}>${esc(options.value || "")}</textarea>`;
+        } else {
+          control = `<input name="${esc(name)}" type="${type}" value="${esc(options.value ?? "")}" placeholder="${esc(options.placeholder || "")}" ${options.min !== undefined ? `min="${options.min}"` : ""} ${options.step ? `step="${options.step}"` : ""} ${required}>`;
+        }
+        return `<div class="field${full}"><label>${label}${required ? " *" : ""}</label>${control}</div>`;
+      }
+      function openModal(title, description, fields, submitText, onSubmit) {
+        const root = $("#overlay-root");
+        root.innerHTML = `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-head"><div><h2 id="modal-title">${title}</h2><p>${description}</p></div><button class="close-button" type="button" aria-label="Close dialog">×</button></div><form class="modal-form"><div class="form-grid">${fields}</div><div class="form-error" role="alert"></div><div class="modal-actions"><button type="button" class="button secondary" data-close>Cancel</button><button class="button" type="submit">${submitText}</button></div></form></section></div>`;
+        const backdrop = $(".modal-backdrop", root);
+        const close = () => { root.innerHTML = ""; };
+        $(".close-button", root).addEventListener("click", close);
+        $("[data-close]", root).addEventListener("click", close);
+        backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close(); });
+        $(".modal-form", root).addEventListener("submit", (event) => {
+          event.preventDefault();
+          const form = event.currentTarget;
+          if (!form.reportValidity()) return;
+          const values = Object.fromEntries(new FormData(form).entries());
+          const error = onSubmit(values);
+          if (error) { $(".form-error", root).textContent = error; return; }
+          persist();
+          close();
+          render();
+        });
+        $("[name]", root)?.focus();
+      }
+      const flockSelect = (selected = "") => field("flockId","Flock","select",{ options: state.flocks.map((f) => ({ value:f.id,label:f.name })), value:selected, required:state.flocks.length > 0 });
+      function flockForm(existing) {
+        const edit = Boolean(existing);
+        const fields = [
+          field("name","Flock / house name","text",{value:existing?.name || "",placeholder:"e.g. House 04 · Lohmann Brown"}),
+          field("breed","Breed","text",{value:existing?.breed || "",placeholder:"e.g. Lohmann Brown"}),
+          field("purchased","Purchase date","date",{value:existing?.purchased || dateISO(today)}),
+          field("ageWeeksAtPurchase","Age when purchased (weeks)","number",{value:existing?.ageWeeksAtPurchase ?? "",min:0,required:false}),
+          field("initialBirds","Birds purchased","number",{value:existing?.initialBirds || "",min:1}),
+          field("birds","Birds currently alive","number",{value:existing?.birds ?? "",min:0}),
+          field("price","Purchase cost per bird","number",{value:existing?.price ?? "",min:0,step:"0.01"}),
+          field("status","Flock stage","select",{value:existing?.status || "Growing",options:[{value:"Growing",label:"Growing / not laying"},{value:"Laying",label:"Laying"},{value:"End of lay",label:"End of lay"},{value:"Culled",label:"Culled / sold"}]}),
+          field("notes","Notes","textarea",{value:existing?.notes || "",required:false,full:true,placeholder:"Supplier, vaccination history or other notes"})
+        ];
+        openModal(edit ? "Update flock" : "Add a new flock", "Keep the bird count and stage current as the batch moves through production.", fields, edit ? "Save changes" : "Add flock", (v) => {
+          if (number(v.birds) > number(v.initialBirds)) return "Current bird count cannot exceed birds purchased.";
+          const flock = { ...(existing || {}), id: existing?.id || `flock-${Date.now()}`, name:v.name.trim(), breed:v.breed.trim(), purchased:v.purchased, ageWeeksAtPurchase:number(v.ageWeeksAtPurchase), initialBirds:number(v.initialBirds), birds:number(v.birds), price:number(v.price), status:v.status, notes:v.notes.trim() };
+          if (edit) state.flocks = state.flocks.map((f) => f.id === existing.id ? flock : f);
+          else {
+            state.flocks.unshift(flock);
+            if (flock.initialBirds * flock.price > 0) state.expenses.unshift({id:`exp-${Date.now()}`,date:flock.purchased,category:"Bird purchase",description:`Purchase · ${flock.name}`,amount:flock.initialBirds*flock.price,flockId:flock.id});
+          }
+          toast(edit ? "Flock updated." : "Flock added.");
+          return "";
+        });
+      }
+      function addCollection() {
+        openModal("Log egg collection", "Record saleable trays by flock and grade. Each tray is 30 eggs.", [
+          field("date","Collection date","date",{value:dateISO(today)}),
+          flockSelect(),
+          field("grade","Egg grade","select",{options:[{value:"Grade A",label:"Grade A"},{value:"Grade B",label:"Grade B"},{value:"Small",label:"Small / pullet eggs"},{value:"Mixed",label:"Mixed"}]}),
+          field("trays","Saleable trays collected","number",{min:0,step:"0.5",placeholder:"0"}),
+          field("rejected","Rejected / cracked eggs","number",{value:0,min:0,required:false}),
+          field("notes","Notes","text",{required:false,placeholder:"Optional collection notes"})
+        ],"Save collection",(v) => {
+          if (!state.flocks.some((f) => f.id === v.flockId)) return "Add a flock before recording a collection.";
+          state.collections.unshift({id:`col-${Date.now()}`,date:v.date,flockId:v.flockId,grade:v.grade,trays:number(v.trays),rejected:number(v.rejected),notes:v.notes});
+          toast("Egg collection saved.");
+          return "";
+        });
+      }
+      function addSale() {
+        const available = stockEggs();
+        openModal("Record an egg sale", `There are ${num(available)} trays available across all flocks. Sales are blocked for flocks in an active egg withdrawal period.`, [
+          field("date","Sale date","date",{value:dateISO(today)}),
+          flockSelect(),
+          field("customer","Customer","text",{placeholder:"Customer or market"}),
+          field("grade","Egg grade","select",{options:[{value:"Grade A",label:"Grade A"},{value:"Grade B",label:"Grade B"},{value:"Small",label:"Small / pullet eggs"},{value:"Mixed",label:"Mixed"}]}),
+          field("trays","Quantity (trays)","number",{min:0.5,step:"0.5",placeholder:"0"}),
+          field("price","Price per tray","number",{min:0,step:"0.01",placeholder:"0"}),
+          field("paid","Payment status","select",{options:[{value:"true",label:"Paid in full"},{value:"false",label:"Unpaid / on credit"}]})
+        ],"Save sale",(v) => {
+          const withdrawal = flockWithdrawal(v.flockId);
+          if (withdrawal) return `${nameOf(v.flockId)} has an egg withdrawal period through ${prettyDate(withdrawalEnd(withdrawal))}. Do not sell eggs from this flock until the period ends.`;
+          const availableForFlock = flockEggStock(v.flockId, v.grade);
+          if (number(v.trays) > availableForFlock) return `Only ${num(availableForFlock)} trays from this flock are available. Record more production first.`;
+          state.sales.unshift({id:`sale-${Date.now()}`,date:v.date,flockId:v.flockId,customer:v.customer.trim(),grade:v.grade,trays:number(v.trays),price:number(v.price),paid:v.paid === "true"});
+          toast("Sale saved and egg stock updated.");
+          return "";
+        });
+      }
+      function addStock(item) {
+        const edit = Boolean(item);
+        openModal(edit ? "Restock inventory" : "Add inventory item", edit ? `Add a delivery to ${item.name} and update its on-hand quantity.` : "Add a feed, medicine or packaging item to your stock register.", [
+          field("name","Item name","text",{value:item?.name || "",placeholder:"e.g. Layer mash"}),
+          ...(!edit ? [field("category","Category","select",{value:"Feed",options:[{value:"Feed",label:"Feed"},{value:"Medicine",label:"Medicine / supplement"},{value:"Packaging",label:"Packaging"},{value:"Other",label:"Other"}]})] : []),
+          field("quantity",edit ? "Quantity received" : "Quantity on hand","number",{value:edit ? "" : item?.quantity ?? "",min:edit ? 0.1 : 0,step:"0.1",placeholder:"0"}),
+          ...(!edit ? [field("unit","Unit","text",{value:"kg",placeholder:"kg, bottles, trays"})] : []),
+          field("threshold","Reorder level","number",{value:item?.threshold ?? "",min:0,step:"0.1"}),
+          field("cost","Cost per unit","number",{value:item?.cost ?? "",min:0,step:"0.01"}),
+          field("expiry","Expiry date (if applicable)","date",{value:item?.expiry || "",required:false})
+        ],edit ? "Save delivery" : "Add item",(v) => {
+          if (edit) {
+              const updated = {...item,name:v.name.trim(),quantity:number(item.quantity) + number(v.quantity),threshold:number(v.threshold),cost:number(v.cost),expiry:v.expiry};
+            state.inventory = state.inventory.map((i) => i.id === item.id ? updated : i);
+                if (number(v.quantity) > 0) state.expenses.unshift({id:`exp-${Date.now()}`,date:dateISO(today),category:item.category === "Feed" ? "Feed" : item.category === "Medicine" ? "Veterinary" : item.category,description:`Restock: ${v.name}`,amount:number(v.quantity)*number(v.cost),flockId:""});
+          } else {
+            const id = `item-${Date.now()}`;
+            state.inventory.unshift({id,name:v.name.trim(),category:v.category,quantity:number(v.quantity),unit:v.unit.trim(),threshold:number(v.threshold),cost:number(v.cost),expiry:v.expiry});
+            if (number(v.quantity) * number(v.cost) > 0) state.expenses.unshift({id:`exp-${Date.now()}`,date:dateISO(today),category:v.category === "Feed" ? "Feed" : v.category === "Medicine" ? "Veterinary" : v.category,description:`Stock purchase: ${v.name.trim()}`,amount:number(v.quantity)*number(v.cost),flockId:""});
+          }
+          toast(edit ? "Stock updated." : "Inventory item added.");
+          return "";
+        });
+      }
+      function logFeed() {
+        const feedOptions = state.inventory.filter((i) => i.category === "Feed");
+        if (!feedOptions.length) { toast("Add a feed item to inventory first."); return; }
+        if (!state.flocks.length) { toast("Add a flock before issuing feed."); return; }
+        openModal("Issue feed to a flock", "Feed usage reduces on-hand stock. Purchase costs are recorded when feed is added to inventory.", [
+          field("date","Date","date",{value:dateISO(today)}),
+          flockSelect(),
+          field("itemId","Feed type","select",{options:feedOptions.map((i) => ({value:i.id,label:`${i.name} · ${num(i.quantity)} ${i.unit}`}))}),
+          field("quantity","Quantity issued (kg)","number",{min:0.1,step:"0.1",placeholder:"0"})
+        ],"Record feed issue",(v) => {
+          const item = state.inventory.find((i) => i.id === v.itemId);
+          if (!item || number(v.quantity) > number(item.quantity)) return `Quantity exceeds available stock${item ? ` (${num(item.quantity)} ${item.unit})` : ""}.`;
+          item.quantity = number(item.quantity) - number(v.quantity);
+          state.feedings.unshift({id:`feed-${Date.now()}`,date:v.date,flockId:v.flockId,itemId:v.itemId,quantity:number(v.quantity)});
+          toast("Feed issued and stock updated.");
+          return "";
+        });
+      }
+      function addHealth() {
+        openModal("Log health record", "Record what was done and any egg withdrawal period advised by the medicine label or veterinarian.", [
+          field("date","Date","date",{value:dateISO(today)}),
+          flockSelect(),
+          field("type","Record type","select",{options:[{value:"Vaccination",label:"Vaccination"},{value:"Treatment",label:"Treatment"},{value:"Vet visit",label:"Veterinary visit"},{value:"Mortality",label:"Mortality / loss"}]}),
+          field("item","Treatment / vaccine / issue","text",{placeholder:"Name or short description"}),
+          field("birdsLost","Birds lost (mortality only)","number",{value:0,min:0}),
+          field("withdrawal","Egg withdrawal (days)","number",{value:0,min:0}),
+          field("notes","Notes","textarea",{required:false,full:true,placeholder:"Dosage, symptoms, vet advice or follow-up"})
+        ],"Save health record",(v) => {
+          const flock = state.flocks.find((f) => f.id === v.flockId);
+          if (v.type === "Mortality" && number(v.birdsLost) < 1) return "Enter the number of birds lost.";
+          if (v.type === "Mortality" && flock && number(v.birdsLost) > number(flock.birds)) return "Birds lost cannot exceed the current flock count.";
+          state.health.unshift({id:`health-${Date.now()}`,date:v.date,flockId:v.flockId,type:v.type,item:v.item.trim(),birdsLost:v.type === "Mortality" ? number(v.birdsLost) : 0,withdrawal:number(v.withdrawal),notes:v.notes.trim()});
+          if (v.type === "Mortality") {
+            if (flock) flock.birds -= number(v.birdsLost);
+          }
+          toast("Health record saved.");
+          return "";
+        });
+      }
+      function addExpense() {
+        openModal("Record a farm expense", "Expenses are included in the net recorded estimate. Bird purchase costs are added automatically when you create a flock.", [
+          field("date","Date","date",{value:dateISO(today)}),
+          field("category","Category","select",{options:[{value:"Bird purchase",label:"Bird purchase"},{value:"Feed",label:"Feed"},{value:"Veterinary",label:"Veterinary / medicine"},{value:"Packaging",label:"Packaging"},{value:"Labor",label:"Labor"},{value:"Transport",label:"Transport"},{value:"Utilities",label:"Utilities"},{value:"Other",label:"Other"}]}),
+          field("description","Description","text",{placeholder:"e.g. New layer flock purchase"}),
+          field("amount","Amount","number",{min:0.01,step:"0.01",placeholder:"0.00"}),
+          field("flockId","Assign to flock (optional)","select",{required:false,options:[{value:"",label:"Farm-wide"},...state.flocks.map((f) => ({value:f.id,label:f.name}))]}),
+          field("notes","Notes","text",{required:false,placeholder:"Optional details"})
+        ],"Save expense",(v) => {
+          state.expenses.unshift({id:`exp-${Date.now()}`,date:v.date,category:v.category,description:v.description.trim(),amount:number(v.amount),flockId:v.flockId});
+          toast("Expense recorded.");
+          return "";
+        });
+      }
+      function addIncome() {
+        openModal("Record other farm income", "Track spent-hen, manure and other income separately from egg sales.", [
+          field("date","Date","date",{value:dateISO(today)}),
+          field("category","Income type","select",{options:[{value:"Spent hens",label:"Spent-hen sale"},{value:"Manure",label:"Manure sale"},{value:"Other",label:"Other farm income"}]}),
+          field("description","Description","text",{placeholder:"e.g. 40 end-of-lay hens sold"}),
+          field("flockId","Assign to flock (optional)","select",{required:false,options:[{value:"",label:"Farm-wide"},...state.flocks.map((f) => ({value:f.id,label:f.name}))]}),
+          field("amount","Amount","number",{min:0.01,step:"0.01",placeholder:"0.00"}),
+          field("paid","Payment status","select",{options:[{value:"true",label:"Received"},{value:"false",label:"Unpaid"}]})
+        ],"Save income",(v) => {
+          state.otherIncome.unshift({id:`income-${Date.now()}`,date:v.date,category:v.category,description:v.description.trim(),flockId:v.flockId,amount:number(v.amount),paid:v.paid === "true"});
+          toast("Other farm income recorded.");
+          return "";
+        });
+      }
+      function exportData() {
+        const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url; link.download = `fieldnote-farm-${dateISO(today)}.json`; link.click();
+        URL.revokeObjectURL(url);
+        toast("Farm data exported.");
+      }
+      function changeCurrency() {
+        const currencies = ["USD","GHS","NGN","KES","UGX","ZAR","GBP","EUR","CAD","AUD"];
+        openModal("Farm currency", "Choose the currency used for prices, sales and expenses.", [
+          field("currency","Display currency","select",{value:state.currency,options:currencies.map((currency) => ({value:currency,label:currency}))})
+        ],"Save currency",(v) => {
+          state.currency = v.currency;
+          $("#currency-button").textContent = v.currency;
+          toast(`Currency updated to ${v.currency}.`);
+          return "";
+        });
+      }
+      document.addEventListener("click", (event) => {
+        const nav = event.target.closest("[data-page]");
+        if (nav) { currentPage = nav.dataset.page; searchTerm = ""; $("#sidebar").classList.remove("open"); render(); return; }
+        const link = event.target.closest("[data-page-link]");
+        if (link) { currentPage = link.dataset.pageLink; searchTerm = ""; render(); return; }
+        const button = event.target.closest("[data-action]");
+        if (!button) return;
+        const action = button.dataset.action;
+        if (action === "log-production") addCollection();
+        else if (action === "add-flock") flockForm();
+        else if (action === "edit-flock") flockForm(state.flocks.find((f) => f.id === button.dataset.id));
+        else if (action === "add-sale") addSale();
+        else if (action === "add-stock") addStock();
+        else if (action === "restock") addStock(state.inventory.find((i) => i.id === button.dataset.id));
+        else if (action === "log-feed") logFeed();
+        else if (action === "add-health") addHealth();
+        else if (action === "add-expense") addExpense();
+        else if (action === "add-income") addIncome();
+        else if (action === "export-data") exportData();
+        else if (action === "mark-paid") {
+          const sale = state.sales.find((s) => s.id === button.dataset.id);
+          if (sale) { sale.paid = true; persist(); render(); toast("Payment marked as received."); }
+        }
+        else if (action === "mark-income-paid") {
+          const income = state.otherIncome.find((i) => i.id === button.dataset.id);
+          if (income) { income.paid = true; persist(); render(); toast("Income marked as received."); }
+        }
+      });
+      document.addEventListener("input", (event) => {
+        if (event.target.matches("[data-search]")) {
+          const input = event.target;
+          const start = input.selectionStart;
+          searchTerm = input.value;
+          render();
+          const updated = $("[data-search]");
+          if (updated) { updated.focus(); updated.setSelectionRange(start, start); }
+        }
+      });
+      $("#menu-button").addEventListener("click", () => $("#sidebar").classList.toggle("open"));
+      $("#alerts-button").addEventListener("click", () => { currentPage = "inventory"; searchTerm = ""; render(); $("#content").scrollIntoView({behavior:"smooth"}); });
+      $("#currency-button").addEventListener("click", changeCurrency);
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") { $("#overlay-root").innerHTML = ""; $("#sidebar").classList.remove("open"); }
+      });
+      render();
+      $("#currency-button").textContent = state.currency;
+      persist();
+    })();
+  </script>
+</body>
+</html>
