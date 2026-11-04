@@ -10,7 +10,7 @@ A browser-based layer-farm manager. Run `index.html` directly for local-only use
 4. Enter the project's **Project URL** and **anon/public key** in `supabase-config.js`. Use `supabase-config.example.js` as a reference.
 5. Deploy `index.html`, `supabase-config.js`, and the other app files together to a static host such as Netlify, Vercel, or GitHub Pages. Use HTTPS in production.
 6. In Supabase **Authentication → URL Configuration**, set the Site URL and allowed redirect URL to your deployed site.
-7. Open the deployed app, create the farm manager account, and sign in. The first signed-in account creates the farm record; later sign-ins to that account load the same cloud data.
+7. Open the deployed app, create the farm manager account, and sign in. Supabase Auth uses the manager's email address and password; `Manager` is the account's display name, not a username accepted by Supabase login. Set the desired password during account registration in the app. The first signed-in account creates the farm record; later sign-ins to that account load the same cloud data.
 
 The Supabase URL and anon/public key are browser-visible credentials. This is expected: the SQL schema restricts access using Supabase Auth and row-level security. **Never put a Supabase service-role/secret key in this app or in `supabase-config.js`.**
 

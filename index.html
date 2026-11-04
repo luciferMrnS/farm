@@ -167,15 +167,19 @@
     .form-error { color: var(--red); font-size: 10px; margin-top: 10px; min-height: 12px; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 17px; }
     .toast { position: fixed; right: 24px; bottom: 24px; z-index: 15; background: var(--forest); color: white; padding: 12px 16px; border-radius: 9px; font-size: 12px; box-shadow: var(--shadow); animation: appear .2s ease-out; }
-    .auth-screen { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(15, 32, 21, .72); padding: 18px; }
-    .auth-card { width: min(100%, 410px); background: white; border-radius: 15px; padding: 27px; box-shadow: 0 25px 80px rgba(0,0,0,.25); }
+    .auth-screen { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: radial-gradient(ellipse at 15% 15%, #e8efdd 0, transparent 38%), var(--paper); padding: 18px; overflow: auto; }
+    .auth-card { width: min(100%, 440px); background: white; border: 1px solid var(--line); border-radius: 16px; padding: 30px; box-shadow: 0 18px 55px rgba(28,42,33,.1); }
     .auth-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 23px; }
-    .auth-card h2 { margin: 0; font-size: 21px; letter-spacing: -.5px; }
-    .auth-card > p { font-size: 12px; line-height: 1.6; color: var(--muted); margin: 8px 0 20px; }
-    .auth-form { display: grid; gap: 13px; }
+    .auth-kicker { color: var(--leaf); font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; font-weight: 750; margin-bottom: 8px; }
+    .auth-card h2 { margin: 0; font-size: 25px; letter-spacing: -.7px; }
+    .auth-card > p { font-size: 12px; line-height: 1.7; color: var(--muted); margin: 8px 0 23px; }
+    .auth-form { display: grid; gap: 15px; }
+    .auth-form .field label { font-size: 11px; }
+    .auth-form .field input { padding: 12px; font-size: 13px; }
+    .auth-form > .button { width: 100%; justify-content: center; margin-top: 2px; padding: 12px; }
     .auth-error { min-height: 0; color: var(--red); font-size: 11px; line-height: 1.5; }
     .auth-error:not(:empty) { padding: 9px 10px; border-radius: 7px; background: #faece9; }
-    .auth-switch { text-align: center; font-size: 11px; margin-top: 15px; color: var(--muted); }
+    .auth-switch { text-align: center; font-size: 11px; margin-top: 19px; color: var(--muted); }
     .link-button { border: 0; padding: 0; background: none; color: var(--leaf); font-weight: 700; }
     @keyframes appear { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
     .menu-button { display: none; }
@@ -549,7 +553,7 @@
       }
       function showAuthGate(mode = "signin", message = "") {
         const isSignup = mode === "signup";
-        $("#overlay-root").innerHTML = `<div class="auth-screen"><section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title"><div class="auth-brand"><span class="brand-mark">♧</span><strong>Fieldnote · Lucea's Poultry Farm</strong></div><h2 id="auth-title">${isSignup ? "Create your manager account" : "Sign in to your farm"}</h2><p>${isSignup ? "Create an account to save your farm records securely in Supabase." : "Sign in to access your farm's cloud-saved flock, production and business records."}</p><form class="auth-form" id="auth-form">${field("email","Email address","email",{placeholder:"manager@example.com"})}${field("password","Password","password",{placeholder:"At least 8 characters"})}<div class="auth-error" role="alert">${esc(message)}</div><button class="button" type="submit">${isSignup ? "Create account" : "Sign in"}</button></form><div class="auth-switch">${isSignup ? "Already have an account?" : "New to Fieldnote?"} <button type="button" class="link-button" id="auth-switch">${isSignup ? "Sign in" : "Create account"}</button></div></section></div>`;
+        $("#overlay-root").innerHTML = `<div class="auth-screen"><section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title"><div class="auth-brand"><span class="brand-mark">♧</span><strong>Fieldnote · Lucea's Poultry Farm</strong></div><div class="auth-kicker">Secure manager access</div><h2 id="auth-title">${isSignup ? "Create manager account" : "Welcome back, Manager"}</h2><p>${isSignup ? "Create your manager account to save farm records securely and access them across devices." : "Sign in with the email and password registered for your farm manager account."}</p><form class="auth-form" id="auth-form">${field("email","Manager email","email",{placeholder:"you@example.com"})}${field("password","Password","password",{placeholder:isSignup ? "Choose a secure password" : "Enter your password"})}<div class="auth-error" role="alert">${esc(message)}</div><button class="button" type="submit">${isSignup ? "Create manager account" : "Sign in"}</button></form><div class="auth-switch">${isSignup ? "Already have an account?" : "First time here?"} <button type="button" class="link-button" id="auth-switch">${isSignup ? "Sign in" : "Create manager account"}</button></div></section></div>`;
         $("#auth-switch").addEventListener("click", () => showAuthGate(isSignup ? "signin" : "signup"));
         $("#auth-form").addEventListener("submit", async (event) => {
           event.preventDefault();
@@ -564,7 +568,7 @@
           try {
             if (!supabaseClient) throw new Error(cloudInitError || "Supabase is not configured or its client library failed to load. Follow the setup instructions in README.md.");
             if (isSignup) {
-              const { data, error } = await supabaseClient.auth.signUp({ email: values.email, password: values.password });
+              const { data, error } = await supabaseClient.auth.signUp({ email: values.email, password: values.password, options: { data: { display_name: "Manager" } } });
               if (error) throw error;
               if (!data.session) {
                 showAuthGate("signin", "Account created. Check your email to confirm the address, then sign in.");
@@ -619,6 +623,8 @@
           state = normalizeFarmData(farm.data);
           state.resetForFreshStart = true;
           $(".farm-name").textContent = farm.name || FARM_NAME;
+          $(".profile-name").textContent = user.user_metadata?.display_name || "Manager";
+          $(".avatar").textContent = "M";
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
           $("#overlay-root").innerHTML = "";
           cloudStatus = "Cloud synced";
