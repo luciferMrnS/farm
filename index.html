@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#183c2b">
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
   <title>Fieldnote — Poultry farm manager</title>
   <style>
     :root {
@@ -243,6 +244,7 @@
         <button class="nav-item" data-page="inventory"><span class="nav-icon">▤</span>Feed & inventory</button>
         <button class="nav-item" data-page="health"><span class="nav-icon">♡</span>Health & care</button>
         <button class="nav-item" data-page="finance"><span class="nav-icon">＄</span>Expenses & profit</button>
+        <button class="nav-item" data-page="investors"><span class="nav-icon">◉</span>Investors</button>
         <button class="nav-item" data-page="reports"><span class="nav-icon">▥</span>Reports</button>
         <button class="nav-item" data-page="team" id="team-nav" hidden><span class="nav-icon">♙</span>Team</button>
       </nav>
@@ -310,6 +312,7 @@
         health: [],
         expenses: [],
         feedings: [],
+        investors: [],
         currency: "NGN",
         resetForFreshStart: true
       });
@@ -321,7 +324,7 @@
           if (!cloudConfigured) state = initialState();
           state.resetForFreshStart = true;
         }
-        ["flocks","collections","sales","otherIncome","inventory","health","expenses","feedings"].forEach((key) => { if (!Array.isArray(state[key])) state[key] = []; });
+        ["flocks","collections","sales","otherIncome","inventory","health","expenses","feedings","investors"].forEach((key) => { if (!Array.isArray(state[key])) state[key] = []; });
         if (typeof state.currency !== "string" || state.currency === "USD") state.currency = "NGN";
       } catch (error) {
         console.error("Could not load saved farm data:", error);
@@ -493,6 +496,19 @@
           <div class="metrics">${metric("Care records", num(state.health.length), "♡", "Vaccinations and treatments")}${metric("Vaccinations", num(state.health.filter((h) => h.type === "Vaccination").length), "✚", "Recorded in the health log")}${metric("Treatments", num(state.health.filter((h) => h.type === "Treatment").length), "＋", "Follow your vet's guidance")}${metric("Active withdrawals", num(state.health.filter(isWithdrawalActive).length), "◷", "Affected flock sales are blocked")}</div>
           <section class="panel list-panel"><div class="panel-head"><div><div class="panel-title">Health register</div><div class="panel-note">Active egg withdrawal periods prevent sales from the affected flock</div></div><input class="search" data-search placeholder="Search records…" value="${esc(searchTerm)}"></div><div class="list-summary"><span class="summary-chip"><strong>${state.health.length}</strong>health records</span><span class="summary-chip"><strong>${state.health.filter((h) => h.type === "Vaccination").length}</strong>vaccinations</span><span class="summary-chip"><strong>${state.health.filter((h) => h.type === "Treatment").length}</strong>treatments</span><span class="summary-chip"><strong>${state.health.filter(isWithdrawalActive).length}</strong>active withdrawals</span></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Flock</th><th>Type</th><th>Treatment / vaccine</th><th>Notes</th><th>Birds lost</th><th>Withdrawal</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
       }
+      function renderInvestors() {
+        const totalInvested = state.investors.reduce((sum, investor) => sum + number(investor.amount), 0);
+        const rows = filterRows(state.investors, ["name","contact","notes"]);
+        const body = rows.length ? rows.map((investor) => {
+          const share = totalInvested ? number(investor.amount) / totalInvested * 100 : 0;
+          return `<tr><td class="strong-cell">${esc(investor.name)}</td><td>${esc(investor.contact || "—")}</td><td class="strong-cell">${money(investor.amount)}</td><td>${share.toFixed(2)}%</td><td>${prettyDate(investor.date)}</td><td>${esc(investor.notes || "—")}</td><td><button class="button secondary small" data-action="edit-investor" data-id="${esc(investor.id)}">Edit</button></td></tr>`;
+        }).join("") : `<tr><td class="empty-state" colspan="7">${searchTerm ? "No investors match your search." : "No investors recorded yet. Add an investor to start tracking contributed capital."}</td></tr>`;
+        const averageInvestment = state.investors.length ? totalInvested / state.investors.length : 0;
+        const topShare = state.investors.reduce((largest, investor) => Math.max(largest, totalInvested ? number(investor.amount) / totalInvested * 100 : 0), 0);
+        return `${heading("Company ownership", "Investors", "Track investor details, capital contributions and each investor’s share of recorded capital.", `<button class="button" data-action="add-investor"><span>＋</span> Add investor</button>`)}
+          <div class="metrics">${metric("Total capital invested", money(totalInvested), "＄", "Across all recorded investors")}${metric("Investors", num(state.investors.length), "♙", "Recorded in the ownership register")}${metric("Largest ownership share", `${topShare.toFixed(2)}%`, "◉", "Based on recorded contributions")}${metric("Average investment", money(averageInvestment), "↗", "Per recorded investor")}</div>
+          <section class="panel list-panel"><div class="panel-head"><div><div class="panel-title">Ownership register</div><div class="panel-note">Ownership share is each investor’s contribution divided by total recorded investments.</div></div><input class="search" data-search placeholder="Search investors…" value="${esc(searchTerm)}"></div><div class="list-summary"><span class="summary-chip"><strong>${money(totalInvested)}</strong>total capital</span><span class="summary-chip"><strong>${totalInvested ? "100.00%" : "0.00%"}</strong>allocated ownership</span><span class="summary-chip"><strong>${state.investors.length}</strong>investors</span></div><div class="table-wrap"><table><thead><tr><th>Investor</th><th>Contact</th><th>Amount invested</th><th>Ownership</th><th>Investment date</th><th>Notes</th><th></th></tr></thead><tbody>${body}</tbody></table></div></section>`;
+      }
       function renderFinance() {
         const categories = [...new Set(state.expenses.map((e) => e.category))];
         const expenseRows = categories.map((category) => {
@@ -529,8 +545,8 @@
         return `${heading("Manage farm access", "Team", "Only you, as the primary manager, can invite other managers and assistant managers.", `<button class="button" data-action="invite-member"><span>＋</span> Invite a team member</button>`)}
           <section class="panel"><div class="panel-head"><div><div class="panel-title">Farm team</div><div class="panel-note">Managers and assistants can view and edit farm records. Only the primary manager can manage the team.</div></div></div><div id="team-status" class="empty-state">Loading team members…</div><div class="table-wrap" id="team-table"></div></section>`;
       }
-      const pageRenderers = { dashboard: renderDashboard, flocks: renderFlocks, production: renderProduction, sales: renderSales, inventory: renderInventory, health: renderHealth, finance: renderFinance, reports: renderReports, team: renderTeam };
-      const pageInfo = { dashboard: ["Overview","Farm overview"], flocks: ["Flocks","Flock management"], production: ["Egg production","Daily egg collection"], sales: ["Egg sales","Sales ledger"], inventory: ["Feed & inventory","Stock management"], health: ["Health & care","Health register"], finance: ["Expenses & profit","Farm finances"], reports: ["Reports","Farm reports"], team: ["Team","Farm team"] };
+      const pageRenderers = { dashboard: renderDashboard, flocks: renderFlocks, production: renderProduction, sales: renderSales, inventory: renderInventory, health: renderHealth, finance: renderFinance, investors: renderInvestors, reports: renderReports, team: renderTeam };
+      const pageInfo = { dashboard: ["Overview","Farm overview"], flocks: ["Flocks","Flock management"], production: ["Egg production","Daily egg collection"], sales: ["Egg sales","Sales ledger"], inventory: ["Feed & inventory","Stock management"], health: ["Health & care","Health register"], finance: ["Expenses & profit","Farm finances"], investors: ["Investors","Company ownership"], reports: ["Reports","Farm reports"], team: ["Team","Farm team"] };
       function render() {
         if (currentPage === "team" && !isPrimaryManager) currentPage = "dashboard";
         $("#content").innerHTML = (pageRenderers[currentPage] || renderDashboard)();
@@ -672,7 +688,7 @@
       }
       function normalizeFarmData(data) {
         const normalized = data && typeof data === "object" ? data : initialState();
-        ["flocks","collections","sales","otherIncome","inventory","health","expenses","feedings"].forEach((key) => {
+        ["flocks","collections","sales","otherIncome","inventory","health","expenses","feedings","investors"].forEach((key) => {
           if (!Array.isArray(normalized[key])) normalized[key] = [];
         });
         if (typeof normalized.currency !== "string") normalized.currency = "NGN";
@@ -983,6 +999,30 @@
           return "";
         });
       }
+      function investorForm(existing) {
+        const edit = Boolean(existing);
+        openModal(edit ? "Update investor" : "Add an investor", "Record their capital contribution and contact details. Ownership shares recalculate from total recorded investments.", [
+          field("name","Investor name","text",{value:existing?.name || "",placeholder:"Full name"}),
+          field("amount","Amount invested","number",{value:existing?.amount ?? "",min:0.01,step:"0.01",placeholder:"0.00"}),
+          field("date","Investment date","date",{value:existing?.date || dateISO(today)}),
+          field("contact","Phone or email","text",{value:existing?.contact || "",required:false,placeholder:"Optional contact details"}),
+          field("notes","Notes","textarea",{value:existing?.notes || "",required:false,full:true,placeholder:"Optional agreement or investment notes"})
+        ],edit ? "Save changes" : "Add investor",(v) => {
+          const investor = {
+            ...(existing || {}),
+            id: existing?.id || `investor-${Date.now()}`,
+            name: v.name.trim(),
+            amount: number(v.amount),
+            date: v.date,
+            contact: v.contact.trim(),
+            notes: v.notes.trim()
+          };
+          if (edit) state.investors = state.investors.map((item) => item.id === existing.id ? investor : item);
+          else state.investors.unshift(investor);
+          toast(edit ? "Investor updated." : "Investor added.");
+          return "";
+        });
+      }
       function exportData() {
         const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
         const url = URL.createObjectURL(blob);
@@ -993,7 +1033,7 @@
       }
       function changeCurrency() {
         const currencies = ["USD","GHS","NGN","KES","UGX","ZAR","GBP","EUR","CAD","AUD"];
-        openModal("Farm currency", "Choose the currency used for prices, sales and expenses.", [
+        openModal("Farm currency", "Choose the currency used for prices, sales, expenses and investor contributions.", [
           field("currency","Display currency","select",{value:state.currency,options:currencies.map((currency) => ({value:currency,label:currency}))})
         ],"Save currency",(v) => {
           state.currency = v.currency;
@@ -1028,6 +1068,8 @@
         else if (action === "add-health") addHealth();
         else if (action === "add-expense") addExpense();
         else if (action === "add-income") addIncome();
+        else if (action === "add-investor") investorForm();
+        else if (action === "edit-investor") investorForm(state.investors.find((investor) => investor.id === button.dataset.id));
         else if (action === "export-data") exportData();
         else if (action === "mark-paid") {
           const sale = state.sales.find((s) => s.id === button.dataset.id);

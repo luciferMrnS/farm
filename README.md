@@ -6,7 +6,7 @@ A browser-based layer-farm manager. Run `index.html` directly for local-only use
 
 1. Create a Supabase project.
 2. In **Authentication → Providers**, enable Email. In **Authentication → Settings**, turn off **Allow new users to sign up** so only invited users can create accounts. Configure email delivery and confirmation for invitations.
-3. In the Supabase SQL Editor, run the contents of [`supabase-schema.sql`](./supabase-schema.sql). It creates the team-membership table, migrates existing farm owners to primary managers, and applies row-level security so farm members can access only their farm. It preserves existing farm records; run it again after updating the app's Supabase schema.
+3. In the Supabase SQL Editor, run the contents of [`supabase-schema.sql`](./supabase-schema.sql). It creates the team-membership table, migrates existing farm owners to primary managers, and applies row-level security so farm members can access only their farm. It preserves existing farm records; run it again after updating the app's Supabase schema. The Investors page stores investor details and contributions with each farm record, and calculates ownership from the total recorded investments.
 4. Enter the project's **Project URL** and **anon/public key** in `supabase-config.js`. Use `supabase-config.example.js` as a reference.
 5. Install and configure the Supabase CLI, link this project, then deploy the invitation function from the project directory:
 
@@ -20,7 +20,7 @@ A browser-based layer-farm manager. Run `index.html` directly for local-only use
    supabase secrets set SITE_URL=https://your-deployed-site.example
    ```
 
-6. Deploy `index.html`, `supabase-config.js`, and the other app files together to a static host using HTTPS. Set the deployed URL as the Supabase **Site URL** and an allowed redirect URL.
+6. Deploy `index.html`, `favicon.svg`, `supabase-config.js`, and the other app files together to a static host using HTTPS. Set the deployed URL as the Supabase **Site URL** and an allowed redirect URL.
 7. The existing farm owner signs in as the primary manager. From **Team**, they can invite managers or assistant managers by email. Invitees open the email link and set their own password before using the app. Managers and assistant managers can view and edit farm records; only the primary manager can manage team access.
 
 The Supabase URL and anon/public key are browser-visible credentials. This is expected: the SQL schema protects farm records and team membership with Supabase Auth and row-level security.
