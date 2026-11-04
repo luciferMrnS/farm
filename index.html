@@ -40,6 +40,7 @@
     .nav-label { color: #92aa97; font-size: 10px; font-weight: 700; letter-spacing: 1.3px; text-transform: uppercase; padding: 9px 13px 10px; }
     .nav-list { display: grid; gap: 4px; }
     .nav-item { width: 100%; color: #d4dfd5; border: 0; text-align: left; background: transparent; padding: 11px 13px; border-radius: 9px; display: flex; align-items: center; gap: 12px; font-size: 13px; transition: background .15s, color .15s; }
+    .nav-item[hidden] { display: none; }
     .nav-item:hover { background: rgba(255,255,255,.08); color: white; }
     .nav-item.active { background: #315a40; color: white; box-shadow: inset 3px 0 var(--lime); }
     .nav-icon { display: grid; place-items: center; width: 18px; opacity: .9; font-size: 16px; }
@@ -179,8 +180,6 @@
     .auth-form > .button { width: 100%; justify-content: center; margin-top: 2px; padding: 12px; }
     .auth-error { min-height: 0; color: var(--red); font-size: 11px; line-height: 1.5; }
     .auth-error:not(:empty) { padding: 9px 10px; border-radius: 7px; background: #faece9; }
-    .auth-switch { text-align: center; font-size: 11px; margin-top: 19px; color: var(--muted); }
-    .link-button { border: 0; padding: 0; background: none; color: var(--leaf); font-weight: 700; }
     @keyframes appear { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
     .menu-button { display: none; }
     @media (max-width: 1050px) {
@@ -245,10 +244,11 @@
         <button class="nav-item" data-page="health"><span class="nav-icon">♡</span>Health & care</button>
         <button class="nav-item" data-page="finance"><span class="nav-icon">＄</span>Expenses & profit</button>
         <button class="nav-item" data-page="reports"><span class="nav-icon">▥</span>Reports</button>
+        <button class="nav-item" data-page="team" id="team-nav" hidden><span class="nav-icon">♙</span>Team</button>
       </nav>
       <div class="side-bottom">
         <div class="farm-card"><div class="farm-overline">Your workspace</div><div class="farm-name">Lucea's Poultry Farm</div><div class="farm-location">Layer farm · Local workspace</div></div>
-        <div class="profile"><div class="avatar">LP</div><div><div class="profile-name">Farm manager</div><div class="profile-role">Administrator</div></div></div>
+        <div class="profile"><div class="avatar">LP</div><div><div class="profile-name">Farm manager</div><div class="profile-role">Manager</div></div></div>
       </div>
     </aside>
     <main class="main">
@@ -291,6 +291,10 @@
       }
       let currentUser = null;
       let farmId = null;
+      let memberRole = null;
+      let isPrimaryManager = false;
+      let requiresPasswordSetup = false;
+      let teamMembers = [];
       let loadingUserId = null;
       let cloudSyncChain = Promise.resolve();
       let cloudStatus = cloudConfigured ? "Sign in required" : "Local only";
@@ -338,14 +342,12 @@
         if (!supabaseClient || !currentUser || !farmId) return;
         const snapshot = JSON.parse(JSON.stringify(state));
         const targetFarmId = farmId;
-        const targetOwnerId = currentUser.id;
         cloudStatus = "Syncing…";
         updateCloudControls();
         cloudSyncChain = cloudSyncChain.then(async () => {
           const { error } = await supabaseClient.from("farms")
             .update({ data: snapshot, updated_at: new Date().toISOString() })
             .eq("id", targetFarmId)
-            .eq("owner_id", targetOwnerId)
             .select("id")
             .single();
           if (error) throw error;
@@ -523,14 +525,72 @@
           <section class="panel"><div class="panel-head"><div><div class="panel-title">Business snapshot</div><div class="panel-note">Cumulative totals from recorded activity</div></div></div><div style="padding:0 20px 14px"><div class="report-row"><span>Eggs collected</span><strong>${num(totalProduced())} trays</strong></div><div class="report-row"><span>Eggs sold</span><strong>${num(soldTrays())} trays</strong></div><div class="report-row"><span>Available for sale</span><strong>${num(stockEggs())} trays</strong></div><div class="report-row"><span>Egg sales revenue</span><strong>${money(salesRevenue())}</strong></div><div class="report-row"><span>Other farm income</span><strong>${money(otherIncomeTotal())}</strong></div><div class="report-row"><span>Expenses entered</span><strong>${money(expenseTotal())}</strong></div></div></section></div>
           <section class="panel" style="margin-top:16px"><div class="panel-head"><div><div class="panel-title">Plan your next flock</div><div class="panel-note">Use a gradual replacement plan to maintain production as older birds decline</div></div><button class="button secondary small" data-page-link="flocks">Manage flocks ↗</button></div><div style="padding:0 20px 17px;font-size:11px;line-height:1.75;color:#667168">Compare each flock's laying trend and health records over time. Add a replacement batch before older flocks leave production, and record end-of-lay sales or culling as farm transactions. This app's estimates are based only on the data you enter; confirm flock and animal-health decisions with a qualified poultry adviser or veterinarian.</div></section>`;
       }
-      const pageRenderers = { dashboard: renderDashboard, flocks: renderFlocks, production: renderProduction, sales: renderSales, inventory: renderInventory, health: renderHealth, finance: renderFinance, reports: renderReports };
-      const pageInfo = { dashboard: ["Overview","Farm overview"], flocks: ["Flocks","Flock management"], production: ["Egg production","Daily egg collection"], sales: ["Egg sales","Sales ledger"], inventory: ["Feed & inventory","Stock management"], health: ["Health & care","Health register"], finance: ["Expenses & profit","Farm finances"], reports: ["Reports","Farm reports"] };
+      function renderTeam() {
+        return `${heading("Manage farm access", "Team", "Only you, as the primary manager, can invite other managers and assistant managers.", `<button class="button" data-action="invite-member"><span>＋</span> Invite a team member</button>`)}
+          <section class="panel"><div class="panel-head"><div><div class="panel-title">Farm team</div><div class="panel-note">Managers and assistants can view and edit farm records. Only the primary manager can manage the team.</div></div></div><div id="team-status" class="empty-state">Loading team members…</div><div class="table-wrap" id="team-table"></div></section>`;
+      }
+      const pageRenderers = { dashboard: renderDashboard, flocks: renderFlocks, production: renderProduction, sales: renderSales, inventory: renderInventory, health: renderHealth, finance: renderFinance, reports: renderReports, team: renderTeam };
+      const pageInfo = { dashboard: ["Overview","Farm overview"], flocks: ["Flocks","Flock management"], production: ["Egg production","Daily egg collection"], sales: ["Egg sales","Sales ledger"], inventory: ["Feed & inventory","Stock management"], health: ["Health & care","Health register"], finance: ["Expenses & profit","Farm finances"], reports: ["Reports","Farm reports"], team: ["Team","Farm team"] };
       function render() {
+        if (currentPage === "team" && !isPrimaryManager) currentPage = "dashboard";
         $("#content").innerHTML = (pageRenderers[currentPage] || renderDashboard)();
         $("#crumb").textContent = pageInfo[currentPage]?.[0] || "Overview";
         $("#flock-count").textContent = state.flocks.length;
         document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.page === currentPage));
         $("#today-label").textContent = today.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+        if (currentPage === "team") loadTeamMembers();
+      }
+      async function loadTeamMembers() {
+        if (!isPrimaryManager || !farmId) return;
+        const status = $("#team-status");
+        const table = $("#team-table");
+        if (!status || !table) return;
+        status.textContent = "Loading team members…";
+        table.innerHTML = "";
+        try {
+          const { data, error } = await supabaseClient.from("farm_members")
+            .select("email, role, is_primary_manager, created_at")
+            .eq("farm_id", farmId)
+            .order("created_at", { ascending: true });
+          if (error) throw error;
+          teamMembers = data || [];
+          status.textContent = teamMembers.length ? "" : "No team members have been added yet.";
+          table.innerHTML = teamMembers.length ? `<table><thead><tr><th>Email</th><th>Role</th><th>Access</th><th>Added</th></tr></thead><tbody>${teamMembers.map((member) => {
+            const roleName = member.role === "assistant_manager" ? "Assistant manager" : "Manager";
+            const access = member.is_primary_manager ? "Team and farm records" : "Farm records";
+            return `<tr><td class="strong-cell">${esc(member.email)}</td><td>${roleName}${member.is_primary_manager ? " · Primary" : ""}</td><td>${access}</td><td>${prettyDate(String(member.created_at || "").slice(0, 10))}</td></tr>`;
+          }).join("")}</tbody></table>` : "";
+        } catch (error) {
+          console.error("Could not load farm team:", error);
+          status.textContent = `Could not load the team: ${error.message || "Check your connection and database setup."}`;
+        }
+      }
+      function inviteTeamMember() {
+        if (!isPrimaryManager || !farmId) {
+          toast("Only the primary manager can invite team members.");
+          return;
+        }
+        openModal("Invite a team member", "They will receive an email invitation to join Lucea's Poultry Farm. Managers and assistant managers can edit farm records; only you can manage team access.", [
+          field("email", "Email address", "email", { full: true, placeholder: "teammate@example.com" }),
+          field("role", "Role", "select", { options: [{ value: "manager", label: "Manager" }, { value: "assistant_manager", label: "Assistant manager" }] })
+        ], "Send invitation", async (values) => {
+          const { data, error } = await supabaseClient.functions.invoke("invite-farm-member", {
+            body: { email: String(values.email || "").trim().toLowerCase(), role: values.role }
+          });
+          if (error) {
+            let message = error.message || "Could not send the invitation.";
+            try {
+              const details = await error.context?.json();
+              if (details?.error) message = details.error;
+            } catch (readError) {
+              console.error("Could not read invitation error details:", readError);
+            }
+            throw new Error(message);
+          }
+          toast(`Invitation sent to ${data.email}.`);
+          await loadTeamMembers();
+          return "";
+        }, { skipPersist: true, rerender: false });
       }
       let toastTimer;
       function toast(message) {
@@ -550,11 +610,10 @@
         account.textContent = !cloudConfigured ? cloudConfigIncomplete ? "Check cloud setup" : "Local only" : currentUser ? "Sign out" : "Sign in";
         account.title = currentUser ? `Signed in as ${currentUser.email || currentUser.id}` : cloudConfigured ? "Sign in to cloud storage" : "Supabase is not configured";
         $(".farm-location").textContent = `Layer farm · ${currentUser ? "Supabase cloud" : "Local workspace"}`;
+        $("#team-nav").hidden = !isPrimaryManager;
       }
-      function showAuthGate(mode = "signin", message = "") {
-        const isSignup = mode === "signup";
-        $("#overlay-root").innerHTML = `<div class="auth-screen"><section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title"><div class="auth-brand"><span class="brand-mark">♧</span><strong>Fieldnote · Lucea's Poultry Farm</strong></div><div class="auth-kicker">Secure manager access</div><h2 id="auth-title">${isSignup ? "Create manager account" : "Welcome back, Manager"}</h2><p>${isSignup ? "Create your manager account to save farm records securely and access them across devices." : "Sign in with the email and password registered for your farm manager account."}</p><form class="auth-form" id="auth-form">${field("email","Manager email","email",{placeholder:"you@example.com"})}${field("password","Password","password",{placeholder:isSignup ? "Choose a secure password" : "Enter your password"})}<div class="auth-error" role="alert">${esc(message)}</div><button class="button" type="submit">${isSignup ? "Create manager account" : "Sign in"}</button></form><div class="auth-switch">${isSignup ? "Already have an account?" : "First time here?"} <button type="button" class="link-button" id="auth-switch">${isSignup ? "Sign in" : "Create manager account"}</button></div></section></div>`;
-        $("#auth-switch").addEventListener("click", () => showAuthGate(isSignup ? "signin" : "signup"));
+      function showAuthGate(message = "") {
+        $("#overlay-root").innerHTML = `<div class="auth-screen"><section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title"><div class="auth-brand"><span class="brand-mark">♧</span><strong>Fieldnote · Lucea's Poultry Farm</strong></div><div class="auth-kicker">Secure manager access</div><h2 id="auth-title">Welcome back</h2><p>Sign in with the email and password provided by your farm's primary manager.</p><form class="auth-form" id="auth-form">${field("email","Email","email",{placeholder:"you@example.com"})}${field("password","Password","password",{placeholder:"Enter your password"})}<div class="auth-error" role="alert">${esc(message)}</div><button class="button" type="submit">Sign in</button></form></section></div>`;
         $("#auth-form").addEventListener("submit", async (event) => {
           event.preventDefault();
           const form = event.currentTarget;
@@ -562,32 +621,54 @@
           const button = $("button[type='submit']", form);
           const errorBox = $(".auth-error", form);
           button.disabled = true;
-          button.textContent = isSignup ? "Creating account…" : "Signing in…";
+          button.textContent = "Signing in…";
           errorBox.textContent = "";
           const values = Object.fromEntries(new FormData(form).entries());
           try {
             if (!supabaseClient) throw new Error(cloudInitError || "Supabase is not configured or its client library failed to load. Follow the setup instructions in README.md.");
-            if (isSignup) {
-              const { data, error } = await supabaseClient.auth.signUp({ email: values.email, password: values.password, options: { data: { display_name: "Manager" } } });
-              if (error) throw error;
-              if (!data.session) {
-                showAuthGate("signin", "Account created. Check your email to confirm the address, then sign in.");
-                return;
-              }
-              await loadCloudFarm(data.user);
-            } else {
-              const { data, error } = await supabaseClient.auth.signInWithPassword({ email: values.email, password: values.password });
-              if (error) throw error;
-              await loadCloudFarm(data.user);
-            }
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email: values.email, password: values.password });
+            if (error) throw error;
+            await loadCloudFarm(data.user);
           } catch (error) {
             console.error("Supabase authentication failed:", error);
             errorBox.textContent = error.message || "Authentication failed. Check your connection and try again.";
             button.disabled = false;
-            button.textContent = isSignup ? "Create account" : "Sign in";
+            button.textContent = "Sign in";
           }
         });
         updateCloudControls();
+      }
+      function showPasswordSetupGate() {
+        $("#overlay-root").innerHTML = `<div class="auth-screen"><section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="password-setup-title"><div class="auth-brand"><span class="brand-mark">♧</span><strong>Fieldnote · Lucea's Poultry Farm</strong></div><div class="auth-kicker">Invitation accepted</div><h2 id="password-setup-title">Set your password</h2><p>Create a password for future sign-ins. You can start managing the farm after setting it.</p><form class="auth-form" id="password-setup-form"><div class="field"><label for="new-password">New password *</label><input id="new-password" name="password" type="password" autocomplete="new-password" minlength="8" required></div><div class="field"><label for="confirm-password">Confirm password *</label><input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></div><div class="auth-error" role="alert"></div><button class="button" type="submit">Save password</button></form></section></div>`;
+        $("#password-setup-form").addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const form = event.currentTarget;
+          if (!form.reportValidity()) return;
+          const values = Object.fromEntries(new FormData(form).entries());
+          const button = $("button[type='submit']", form);
+          const errorBox = $(".auth-error", form);
+          if (values.password !== values.confirmPassword) {
+            errorBox.textContent = "The passwords do not match.";
+            return;
+          }
+          button.disabled = true;
+          button.textContent = "Saving password…";
+          errorBox.textContent = "";
+          try {
+            const { error: passwordError } = await supabaseClient.auth.updateUser({ password: values.password });
+            if (passwordError) throw passwordError;
+            const { error: setupError } = await supabaseClient.rpc("complete_farm_member_setup");
+            if (setupError) throw setupError;
+            requiresPasswordSetup = false;
+            $("#overlay-root").innerHTML = "";
+            toast("Password saved. Welcome to the farm team.");
+          } catch (error) {
+            console.error("Could not complete invited account setup:", error);
+            errorBox.textContent = error.message || "Could not save your password. Please try again.";
+            button.disabled = false;
+            button.textContent = "Save password";
+          }
+        });
       }
       function normalizeFarmData(data) {
         const normalized = data && typeof data === "object" ? data : initialState();
@@ -602,40 +683,47 @@
         loadingUserId = user.id;
         currentUser = user;
         farmId = null;
+        memberRole = null;
+        isPrimaryManager = false;
         cloudStatus = "Loading farm…";
         updateCloudControls();
         try {
-          const { data: existingFarm, error } = await supabaseClient.from("farms")
-            .select("id, name, data")
-            .eq("owner_id", user.id)
+          const { data: membership, error: membershipError } = await supabaseClient.from("farm_members")
+            .select("farm_id, role, is_primary_manager, requires_password_setup")
+            .eq("user_id", user.id)
             .maybeSingle();
+          if (membershipError) throw membershipError;
+          if (!membership) throw new Error("This account has not been added to the farm. Ask the primary manager to invite you.");
+          memberRole = membership.role;
+          isPrimaryManager = membership.is_primary_manager === true;
+          requiresPasswordSetup = membership.requires_password_setup === true;
+          const { data: farm, error } = await supabaseClient.from("farms")
+            .select("id, name, data")
+            .eq("id", membership.farm_id)
+            .single();
           if (error) throw error;
-          let farm = existingFarm;
-          if (!farm) {
-            const { data: newFarm, error: createError } = await supabaseClient.from("farms")
-              .insert({ owner_id: user.id, name: FARM_NAME, data: initialState() })
-              .select("id, name, data")
-              .single();
-            if (createError) throw createError;
-            farm = newFarm;
-          }
           farmId = farm.id;
           state = normalizeFarmData(farm.data);
           state.resetForFreshStart = true;
           $(".farm-name").textContent = farm.name || FARM_NAME;
-          $(".profile-name").textContent = user.user_metadata?.display_name || "Manager";
-          $(".avatar").textContent = "M";
+          $(".profile-name").textContent = user.user_metadata?.display_name || (memberRole === "assistant_manager" ? "Assistant Manager" : "Manager");
+          $(".profile-role").textContent = isPrimaryManager ? "Primary manager" : memberRole === "assistant_manager" ? "Assistant manager" : "Manager";
+          $(".avatar").textContent = memberRole === "assistant_manager" ? "A" : "M";
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-          $("#overlay-root").innerHTML = "";
+          if (requiresPasswordSetup) showPasswordSetupGate();
+          else $("#overlay-root").innerHTML = "";
           cloudStatus = "Cloud synced";
           updateCloudControls();
           $("#currency-button").textContent = state.currency;
           render();
         } catch (error) {
           console.error("Could not load the farm from Supabase:", error);
+          memberRole = null;
+          isPrimaryManager = false;
+          requiresPasswordSetup = false;
           cloudStatus = "Cloud connection failed";
           updateCloudControls();
-          showAuthGate("signin", `Could not load your farm: ${error.message || "Check Supabase setup, database schema and connection."}`);
+          showAuthGate(`Could not load your farm: ${error.message || "Check Supabase setup, database schema and connection."}`);
         } finally {
           loadingUserId = null;
         }
@@ -643,7 +731,7 @@
       async function startCloudSession() {
         if (!supabaseClient) {
           cloudStatus = "Supabase unavailable";
-          showAuthGate("signin", cloudInitError || "The Supabase client could not load. Check your internet connection and try again.");
+          showAuthGate(cloudInitError || "The Supabase client could not load. Check your internet connection and try again.");
           return;
         }
         try {
@@ -653,23 +741,27 @@
             if (event === "SIGNED_OUT") {
               currentUser = null;
               farmId = null;
+              memberRole = null;
+              isPrimaryManager = false;
+              requiresPasswordSetup = false;
+              teamMembers = [];
               state = initialState();
               localStorage.removeItem(STORAGE_KEY);
               cloudStatus = "Signed out";
               render();
               updateCloudControls();
-              showAuthGate("signin");
+              showAuthGate();
             } else if (session?.user) {
               setTimeout(() => loadCloudFarm(session.user), 0);
             }
           });
           if (data.session?.user) await loadCloudFarm(data.session.user);
-          else showAuthGate("signin");
+          else showAuthGate();
         } catch (error) {
           console.error("Could not initialize Supabase authentication:", error);
           cloudStatus = "Cloud connection failed";
           updateCloudControls();
-          showAuthGate("signin", error.message || "Could not connect to Supabase.");
+          showAuthGate(error.message || "Could not connect to Supabase.");
         }
       }
       function accountAction() {
@@ -687,7 +779,7 @@
             toast(`Could not sign out: ${error.message || "Check your connection."}`);
           });
         } else {
-          showAuthGate("signin");
+          showAuthGate();
         }
       }
       function field(name, label, type = "text", options = {}) {
@@ -704,7 +796,7 @@
         }
         return `<div class="field${full}"><label>${label}${required ? " *" : ""}</label>${control}</div>`;
       }
-      function openModal(title, description, fields, submitText, onSubmit) {
+      function openModal(title, description, fields, submitText, onSubmit, options = {}) {
         const root = $("#overlay-root");
         root.innerHTML = `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-head"><div><h2 id="modal-title">${title}</h2><p>${description}</p></div><button class="close-button" type="button" aria-label="Close dialog">×</button></div><form class="modal-form"><div class="form-grid">${fields}</div><div class="form-error" role="alert"></div><div class="modal-actions"><button type="button" class="button secondary" data-close>Cancel</button><button class="button" type="submit">${submitText}</button></div></form></section></div>`;
         const backdrop = $(".modal-backdrop", root);
@@ -712,16 +804,30 @@
         $(".close-button", root).addEventListener("click", close);
         $("[data-close]", root).addEventListener("click", close);
         backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close(); });
-        $(".modal-form", root).addEventListener("submit", (event) => {
+        $(".modal-form", root).addEventListener("submit", async (event) => {
           event.preventDefault();
           const form = event.currentTarget;
           if (!form.reportValidity()) return;
           const values = Object.fromEntries(new FormData(form).entries());
-          const error = onSubmit(values);
-          if (error) { $(".form-error", root).textContent = error; return; }
-          persist();
-          close();
-          render();
+          const submit = $("button[type='submit']", form);
+          submit.disabled = true;
+          try {
+            const error = await onSubmit(values);
+            if (error) {
+              const errorElement = $(".form-error", root);
+              if (errorElement) errorElement.textContent = error;
+              return;
+            }
+            if (!options.skipPersist) persist();
+            close();
+            if (options.rerender !== false) render();
+          } catch (error) {
+            console.error("Could not submit the form:", error);
+            const errorElement = $(".form-error", root);
+            if (errorElement) errorElement.textContent = error.message || "Could not complete this action. Please try again.";
+          } finally {
+            if (form.isConnected) submit.disabled = false;
+          }
         });
         $("[name]", root)?.focus();
       }
@@ -898,13 +1004,21 @@
       }
       document.addEventListener("click", (event) => {
         const nav = event.target.closest("[data-page]");
-        if (nav) { currentPage = nav.dataset.page; searchTerm = ""; $("#sidebar").classList.remove("open"); render(); return; }
+        if (nav) {
+          if (nav.dataset.page === "team" && !isPrimaryManager) return;
+          currentPage = nav.dataset.page;
+          searchTerm = "";
+          $("#sidebar").classList.remove("open");
+          render();
+          return;
+        }
         const link = event.target.closest("[data-page-link]");
         if (link) { currentPage = link.dataset.pageLink; searchTerm = ""; render(); return; }
         const button = event.target.closest("[data-action]");
         if (!button) return;
         const action = button.dataset.action;
-        if (action === "log-production") addCollection();
+        if (action === "invite-member") inviteTeamMember();
+        else if (action === "log-production") addCollection();
         else if (action === "add-flock") flockForm();
         else if (action === "edit-flock") flockForm(state.flocks.find((f) => f.id === button.dataset.id));
         else if (action === "add-sale") addSale();
@@ -949,7 +1063,7 @@
       updateCloudControls();
       if (cloudConfigured) {
         cloudStatus = "Checking session…";
-        showAuthGate("signin", "Checking your Supabase session…");
+        showAuthGate("Checking your Supabase session…");
         startCloudSession();
       }
       else persist();

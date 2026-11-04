@@ -1,19 +1,28 @@
 # Fieldnote — Lucea's Poultry Farm
 
-A browser-based layer-farm manager. Run `index.html` directly for local-only use, or host these files as a static site and connect a Supabase project for sign-in and cloud-saved records.
+A browser-based layer-farm manager. Run `index.html` directly for local-only use, or host the app as a static site and connect a Supabase project for sign-in and shared farm records.
 
-## Enable Supabase storage
+## Set up Supabase and manager invitations
 
 1. Create a Supabase project.
-2. In the Supabase SQL Editor, run the contents of [`supabase-schema.sql`](./supabase-schema.sql). It creates the `farms` table and enables row-level security so a signed-in account can read and change only its own farm row.
-3. In **Authentication → Providers**, enable Email. If email confirmation is on, confirm the account from the email before signing in.
+2. In **Authentication → Providers**, enable Email. In **Authentication → Settings**, turn off **Allow new users to sign up** so only invited users can create accounts. Configure email delivery and confirmation for invitations.
+3. In the Supabase SQL Editor, run the contents of [`supabase-schema.sql`](./supabase-schema.sql). It creates the team-membership table, migrates existing farm owners to primary managers, and applies row-level security so farm members can access only their farm. It preserves existing farm records; run it again after updating the app's Supabase schema.
 4. Enter the project's **Project URL** and **anon/public key** in `supabase-config.js`. Use `supabase-config.example.js` as a reference.
-5. Deploy `index.html`, `supabase-config.js`, and the other app files together to a static host such as Netlify, Vercel, or GitHub Pages. Use HTTPS in production.
-6. In Supabase **Authentication → URL Configuration**, set the Site URL and allowed redirect URL to your deployed site.
-7. Open the deployed app, create the farm manager account, and sign in. Supabase Auth uses the manager's email address and password; `Manager` is the account's display name, not a username accepted by Supabase login. Set the desired password during account registration in the app. The first signed-in account creates the farm record; later sign-ins to that account load the same cloud data.
+5. Install and configure the Supabase CLI, link this project, then deploy the invitation function from the project directory:
 
-The Supabase URL and anon/public key are browser-visible credentials. This is expected: the SQL schema restricts access using Supabase Auth and row-level security. **Never put a Supabase service-role/secret key in this app or in `supabase-config.js`.**
+   ```sh
+   supabase functions deploy invite-farm-member
+   ```
 
-The current cloud schema supports one farm-owner account per farm. The app writes each farm's records as one JSON document, so use one manager account at a time; it does not yet provide multi-manager roles or conflict resolution for simultaneous edits.
+   The function uses Supabase's server-side service-role environment variable; never put a service-role/secret key in the browser app or `supabase-config.js`. To send invite links back to the deployed app, set the Edge Function `SITE_URL` secret to the app's HTTPS URL and add that URL to **Authentication → URL Configuration → Redirect URLs**:
 
-Without Supabase credentials, the app clearly indicates **Local only** and continues to save in the current browser's local storage. Once Supabase is configured, a manager must sign in to access farm records.
+   ```sh
+   supabase secrets set SITE_URL=https://your-deployed-site.example
+   ```
+
+6. Deploy `index.html`, `supabase-config.js`, and the other app files together to a static host using HTTPS. Set the deployed URL as the Supabase **Site URL** and an allowed redirect URL.
+7. The existing farm owner signs in as the primary manager. From **Team**, they can invite managers or assistant managers by email. Invitees open the email link and set their own password before using the app. Managers and assistant managers can view and edit farm records; only the primary manager can manage team access.
+
+The Supabase URL and anon/public key are browser-visible credentials. This is expected: the SQL schema protects farm records and team membership with Supabase Auth and row-level security.
+
+Without Supabase credentials, the app indicates **Local only** and saves in the current browser's local storage. With Supabase configured, a user must be invited to a farm before they can access its records.
