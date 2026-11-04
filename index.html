@@ -58,6 +58,7 @@
     .breadcrumb { color: var(--muted); font-size: 12px; }
     .breadcrumb strong { color: var(--ink); font-weight: 650; }
     .top-actions { display: flex; align-items: center; gap: 17px; }
+    .sync-status { color: var(--muted); font-size: 10px; white-space: nowrap; }
     .date-pill { display: flex; align-items: center; gap: 8px; color: #657168; font-size: 12px; }
     .icon-button { border: 1px solid var(--line); border-radius: 9px; width: 37px; height: 37px; background: #fff; color: var(--forest); display: grid; place-items: center; position: relative; }
     .icon-button .dot { position: absolute; width: 7px; height: 7px; top: 7px; right: 7px; background: var(--orange); border-radius: 50%; border: 1px solid #fff; }
@@ -166,6 +167,16 @@
     .form-error { color: var(--red); font-size: 10px; margin-top: 10px; min-height: 12px; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 17px; }
     .toast { position: fixed; right: 24px; bottom: 24px; z-index: 15; background: var(--forest); color: white; padding: 12px 16px; border-radius: 9px; font-size: 12px; box-shadow: var(--shadow); animation: appear .2s ease-out; }
+    .auth-screen { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(15, 32, 21, .72); padding: 18px; }
+    .auth-card { width: min(100%, 410px); background: white; border-radius: 15px; padding: 27px; box-shadow: 0 25px 80px rgba(0,0,0,.25); }
+    .auth-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 23px; }
+    .auth-card h2 { margin: 0; font-size: 21px; letter-spacing: -.5px; }
+    .auth-card > p { font-size: 12px; line-height: 1.6; color: var(--muted); margin: 8px 0 20px; }
+    .auth-form { display: grid; gap: 13px; }
+    .auth-error { min-height: 0; color: var(--red); font-size: 11px; line-height: 1.5; }
+    .auth-error:not(:empty) { padding: 9px 10px; border-radius: 7px; background: #faece9; }
+    .auth-switch { text-align: center; font-size: 11px; margin-top: 15px; color: var(--muted); }
+    .link-button { border: 0; padding: 0; background: none; color: var(--leaf); font-weight: 700; }
     @keyframes appear { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
     .menu-button { display: none; }
     @media (max-width: 1050px) {
@@ -185,6 +196,7 @@
       .breadcrumb { display: none; }
       .date-pill { display: none; }
       .top-actions { gap: 9px; }
+      .sync-status { display: none; }
       .content { padding: 25px 15px 35px; }
       .page-heading { align-items: flex-start; flex-direction: column; }
       .page-heading .toolbar { width: 100%; }
@@ -244,6 +256,8 @@
         </div>
         <div class="top-actions">
           <div class="date-pill"><span>◷</span><span id="today-label"></span></div>
+          <span class="sync-status" id="sync-status">Local only</span>
+          <button class="button secondary small" id="account-button" title="Cloud storage status">Local only</button>
           <button class="button secondary small" id="currency-button" title="Change farm currency">NGN</button>
           <button class="icon-button" id="alerts-button" aria-label="View inventory alerts">♧<span class="dot"></span></button>
         </div>
@@ -252,10 +266,30 @@
     </main>
   </div>
   <div id="overlay-root"></div>
+  <script src="./supabase-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     (() => {
       "use strict";
       const STORAGE_KEY = "fieldnote-poultry-v1";
+      const FARM_NAME = "Lucea's Poultry Farm";
+      const supabaseSettings = window.FIELDNOTE_SUPABASE || {};
+      const cloudConfigIncomplete = Boolean(supabaseSettings.url || supabaseSettings.anonKey) && !(supabaseSettings.url && supabaseSettings.anonKey);
+      const cloudConfigured = Boolean(supabaseSettings.url && supabaseSettings.anonKey);
+      let supabaseClient = null;
+      let cloudInitError = "";
+      if (cloudConfigured && window.supabase?.createClient) {
+        try {
+          supabaseClient = window.supabase.createClient(supabaseSettings.url, supabaseSettings.anonKey);
+        } catch (error) {
+          cloudInitError = error.message || "Invalid Supabase project settings.";
+        }
+      }
+      let currentUser = null;
+      let farmId = null;
+      let loadingUserId = null;
+      let cloudSyncChain = Promise.resolve();
+      let cloudStatus = cloudConfigured ? "Sign in required" : "Local only";
       const today = new Date();
       const dateISO = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
       const daysAgo = (days) => { const date = new Date(); date.setDate(date.getDate() - days); return dateISO(date); };
@@ -268,14 +302,15 @@
         health: [],
         expenses: [],
         feedings: [],
-        currency: "NGN"
+        currency: "NGN",
+        resetForFreshStart: true
       });
       let state;
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
-        state = saved ? JSON.parse(saved) : initialState();
+        state = !cloudConfigured && saved ? JSON.parse(saved) : initialState();
         if (saved && state.resetForFreshStart !== true) {
-          state = initialState();
+          if (!cloudConfigured) state = initialState();
           state.resetForFreshStart = true;
         }
         ["flocks","collections","sales","otherIncome","inventory","health","expenses","feedings"].forEach((key) => { if (!Array.isArray(state[key])) state[key] = []; });
@@ -296,6 +331,28 @@
       const persist = () => {
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
         catch (error) { console.error("Could not save farm data:", error); toast("Unable to save. Check browser storage."); }
+        if (!supabaseClient || !currentUser || !farmId) return;
+        const snapshot = JSON.parse(JSON.stringify(state));
+        const targetFarmId = farmId;
+        const targetOwnerId = currentUser.id;
+        cloudStatus = "Syncing…";
+        updateCloudControls();
+        cloudSyncChain = cloudSyncChain.then(async () => {
+          const { error } = await supabaseClient.from("farms")
+            .update({ data: snapshot, updated_at: new Date().toISOString() })
+            .eq("id", targetFarmId)
+            .eq("owner_id", targetOwnerId)
+            .select("id")
+            .single();
+          if (error) throw error;
+          cloudStatus = "Cloud synced";
+          updateCloudControls();
+        }).catch((error) => {
+          console.error("Cloud sync failed:", error);
+          cloudStatus = "Sync failed";
+          updateCloudControls();
+          toast(`Saved on this device, but cloud sync failed: ${error.message || "Check Supabase setup and connection."}`);
+        });
       };
       const flockBirds = () => state.flocks.filter((f) => f.status !== "Culled").reduce((sum, f) => sum + number(f.birds), 0);
       const productionOn = (date) => state.collections.filter((c) => c.date === date).reduce((sum, c) => sum + number(c.trays), 0);
@@ -480,6 +537,152 @@
         document.body.append(el);
         clearTimeout(toastTimer);
         toastTimer = setTimeout(() => el.remove(), 2800);
+      }
+      function updateCloudControls() {
+        const status = $("#sync-status");
+        const account = $("#account-button");
+        if (!status || !account) return;
+        status.textContent = cloudStatus;
+        account.textContent = !cloudConfigured ? cloudConfigIncomplete ? "Check cloud setup" : "Local only" : currentUser ? "Sign out" : "Sign in";
+        account.title = currentUser ? `Signed in as ${currentUser.email || currentUser.id}` : cloudConfigured ? "Sign in to cloud storage" : "Supabase is not configured";
+        $(".farm-location").textContent = `Layer farm · ${currentUser ? "Supabase cloud" : "Local workspace"}`;
+      }
+      function showAuthGate(mode = "signin", message = "") {
+        const isSignup = mode === "signup";
+        $("#overlay-root").innerHTML = `<div class="auth-screen"><section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title"><div class="auth-brand"><span class="brand-mark">♧</span><strong>Fieldnote · Lucea's Poultry Farm</strong></div><h2 id="auth-title">${isSignup ? "Create your manager account" : "Sign in to your farm"}</h2><p>${isSignup ? "Create an account to save your farm records securely in Supabase." : "Sign in to access your farm's cloud-saved flock, production and business records."}</p><form class="auth-form" id="auth-form">${field("email","Email address","email",{placeholder:"manager@example.com"})}${field("password","Password","password",{placeholder:"At least 8 characters"})}<div class="auth-error" role="alert">${esc(message)}</div><button class="button" type="submit">${isSignup ? "Create account" : "Sign in"}</button></form><div class="auth-switch">${isSignup ? "Already have an account?" : "New to Fieldnote?"} <button type="button" class="link-button" id="auth-switch">${isSignup ? "Sign in" : "Create account"}</button></div></section></div>`;
+        $("#auth-switch").addEventListener("click", () => showAuthGate(isSignup ? "signin" : "signup"));
+        $("#auth-form").addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const form = event.currentTarget;
+          if (!form.reportValidity()) return;
+          const button = $("button[type='submit']", form);
+          const errorBox = $(".auth-error", form);
+          button.disabled = true;
+          button.textContent = isSignup ? "Creating account…" : "Signing in…";
+          errorBox.textContent = "";
+          const values = Object.fromEntries(new FormData(form).entries());
+          try {
+            if (!supabaseClient) throw new Error(cloudInitError || "Supabase is not configured or its client library failed to load. Follow the setup instructions in README.md.");
+            if (isSignup) {
+              const { data, error } = await supabaseClient.auth.signUp({ email: values.email, password: values.password });
+              if (error) throw error;
+              if (!data.session) {
+                showAuthGate("signin", "Account created. Check your email to confirm the address, then sign in.");
+                return;
+              }
+              await loadCloudFarm(data.user);
+            } else {
+              const { data, error } = await supabaseClient.auth.signInWithPassword({ email: values.email, password: values.password });
+              if (error) throw error;
+              await loadCloudFarm(data.user);
+            }
+          } catch (error) {
+            console.error("Supabase authentication failed:", error);
+            errorBox.textContent = error.message || "Authentication failed. Check your connection and try again.";
+            button.disabled = false;
+            button.textContent = isSignup ? "Create account" : "Sign in";
+          }
+        });
+        updateCloudControls();
+      }
+      function normalizeFarmData(data) {
+        const normalized = data && typeof data === "object" ? data : initialState();
+        ["flocks","collections","sales","otherIncome","inventory","health","expenses","feedings"].forEach((key) => {
+          if (!Array.isArray(normalized[key])) normalized[key] = [];
+        });
+        if (typeof normalized.currency !== "string") normalized.currency = "NGN";
+        return normalized;
+      }
+      async function loadCloudFarm(user) {
+        if (!user || (currentUser?.id === user.id && farmId) || loadingUserId === user.id) return;
+        loadingUserId = user.id;
+        currentUser = user;
+        farmId = null;
+        cloudStatus = "Loading farm…";
+        updateCloudControls();
+        try {
+          const { data: existingFarm, error } = await supabaseClient.from("farms")
+            .select("id, name, data")
+            .eq("owner_id", user.id)
+            .maybeSingle();
+          if (error) throw error;
+          let farm = existingFarm;
+          if (!farm) {
+            const { data: newFarm, error: createError } = await supabaseClient.from("farms")
+              .insert({ owner_id: user.id, name: FARM_NAME, data: initialState() })
+              .select("id, name, data")
+              .single();
+            if (createError) throw createError;
+            farm = newFarm;
+          }
+          farmId = farm.id;
+          state = normalizeFarmData(farm.data);
+          state.resetForFreshStart = true;
+          $(".farm-name").textContent = farm.name || FARM_NAME;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+          $("#overlay-root").innerHTML = "";
+          cloudStatus = "Cloud synced";
+          updateCloudControls();
+          $("#currency-button").textContent = state.currency;
+          render();
+        } catch (error) {
+          console.error("Could not load the farm from Supabase:", error);
+          cloudStatus = "Cloud connection failed";
+          updateCloudControls();
+          showAuthGate("signin", `Could not load your farm: ${error.message || "Check Supabase setup, database schema and connection."}`);
+        } finally {
+          loadingUserId = null;
+        }
+      }
+      async function startCloudSession() {
+        if (!supabaseClient) {
+          cloudStatus = "Supabase unavailable";
+          showAuthGate("signin", cloudInitError || "The Supabase client could not load. Check your internet connection and try again.");
+          return;
+        }
+        try {
+          const { data, error } = await supabaseClient.auth.getSession();
+          if (error) throw error;
+          supabaseClient.auth.onAuthStateChange((event, session) => {
+            if (event === "SIGNED_OUT") {
+              currentUser = null;
+              farmId = null;
+              state = initialState();
+              localStorage.removeItem(STORAGE_KEY);
+              cloudStatus = "Signed out";
+              render();
+              updateCloudControls();
+              showAuthGate("signin");
+            } else if (session?.user) {
+              setTimeout(() => loadCloudFarm(session.user), 0);
+            }
+          });
+          if (data.session?.user) await loadCloudFarm(data.session.user);
+          else showAuthGate("signin");
+        } catch (error) {
+          console.error("Could not initialize Supabase authentication:", error);
+          cloudStatus = "Cloud connection failed";
+          updateCloudControls();
+          showAuthGate("signin", error.message || "Could not connect to Supabase.");
+        }
+      }
+      function accountAction() {
+        if (cloudConfigIncomplete) {
+          openModal("Supabase setup is incomplete", "Both the Supabase Project URL and anon/public key are required in supabase-config.js. Until then, this browser saves locally only.", [], "Got it", () => "");
+          return;
+        }
+        if (!cloudConfigured) {
+          openModal("Supabase is not configured", "This browser is currently saving data locally. To enable shared cloud storage, follow the Supabase setup steps in README.md, run supabase-schema.sql in your project's SQL Editor, and add your project URL and anon key to supabase-config.js.", [], "Got it", () => "");
+        } else if (currentUser) {
+          supabaseClient.auth.signOut().then(({ error }) => {
+            if (error) throw error;
+          }).catch((error) => {
+            console.error("Could not sign out:", error);
+            toast(`Could not sign out: ${error.message || "Check your connection."}`);
+          });
+        } else {
+          showAuthGate("signin");
+        }
       }
       function field(name, label, type = "text", options = {}) {
         const required = options.required === false ? "" : "required";
@@ -728,12 +931,22 @@
       $("#menu-button").addEventListener("click", () => $("#sidebar").classList.toggle("open"));
       $("#alerts-button").addEventListener("click", () => { currentPage = "inventory"; searchTerm = ""; render(); $("#content").scrollIntoView({behavior:"smooth"}); });
       $("#currency-button").addEventListener("click", changeCurrency);
+      $("#account-button").addEventListener("click", accountAction);
       document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") { $("#overlay-root").innerHTML = ""; $("#sidebar").classList.remove("open"); }
+        if (event.key === "Escape") {
+          if (!$(".auth-screen")) $("#overlay-root").innerHTML = "";
+          $("#sidebar").classList.remove("open");
+        }
       });
       render();
       $("#currency-button").textContent = state.currency;
-      persist();
+      updateCloudControls();
+      if (cloudConfigured) {
+        cloudStatus = "Checking session…";
+        showAuthGate("signin", "Checking your Supabase session…");
+        startCloudSession();
+      }
+      else persist();
     })();
   </script>
 </body>
