@@ -6,7 +6,7 @@ A browser-based layer-farm manager. Run `index.html` directly for local-only use
 
 1. Create a Supabase project.
 2. In **Authentication → Providers**, enable Email. In **Authentication → Settings**, turn off **Allow new users to sign up** so only invited users can create accounts. Configure email delivery and confirmation for invitations.
-3. In the Supabase SQL Editor, run the contents of [`supabase-schema.sql`](./supabase-schema.sql). It creates the team-membership table, migrates existing farm owners to primary managers, and applies row-level security so farm members can access only their farm. It preserves existing farm records; run it again after updating the app's Supabase schema. The Investors page stores investor details and contributions with each farm record, and calculates ownership from the total recorded investments.
+3. In the Supabase SQL Editor, run the contents of [`supabase-schema.sql`](./supabase-schema.sql). It creates the team-membership table, migrates existing farm owners to primary managers, and applies row-level security so farm members can access only their farm. It preserves existing farm records; run it again after updating the app's Supabase schema. The Investors page stores investor details and contributions with each farm record. The Investor ROI page saves monthly company-capital, sales and investor-contribution snapshots, then calculates distributions after a 30% management fee.
 4. Enter the project's **Project URL** and **anon/public key** in `supabase-config.js`. Use `supabase-config.example.js` as a reference.
 5. Install and configure the Supabase CLI, link this project, then deploy the invitation function from the project directory:
 

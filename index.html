@@ -245,6 +245,7 @@
         <button class="nav-item" data-page="health"><span class="nav-icon">♡</span>Health & care</button>
         <button class="nav-item" data-page="finance"><span class="nav-icon">＄</span>Expenses & profit</button>
         <button class="nav-item" data-page="investors"><span class="nav-icon">◉</span>Investors</button>
+        <button class="nav-item" data-page="investor-roi"><span class="nav-icon">％</span>Investor ROI</button>
         <button class="nav-item" data-page="reports"><span class="nav-icon">▥</span>Reports</button>
         <button class="nav-item" data-page="team" id="team-nav" hidden><span class="nav-icon">♙</span>Team</button>
       </nav>
@@ -313,6 +314,7 @@
         expenses: [],
         feedings: [],
         investors: [],
+        investorRoiMonths: [],
         currency: "NGN",
         resetForFreshStart: true
       });
@@ -324,7 +326,7 @@
           if (!cloudConfigured) state = initialState();
           state.resetForFreshStart = true;
         }
-        ["flocks","collections","sales","otherIncome","inventory","health","expenses","feedings","investors"].forEach((key) => { if (!Array.isArray(state[key])) state[key] = []; });
+        ["flocks","collections","sales","otherIncome","inventory","health","expenses","feedings","investors","investorRoiMonths"].forEach((key) => { if (!Array.isArray(state[key])) state[key] = []; });
         if (typeof state.currency !== "string" || state.currency === "USD") state.currency = "NGN";
       } catch (error) {
         console.error("Could not load saved farm data:", error);
@@ -332,6 +334,7 @@
       }
       let currentPage = "dashboard";
       let searchTerm = "";
+      let selectedRoiMonth = "";
       const $ = (selector, root = document) => root.querySelector(selector);
       const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
       const number = (value) => Number(value) || 0;
@@ -509,6 +512,40 @@
           <div class="metrics">${metric("Total capital invested", money(totalInvested), "＄", "Across all recorded investors")}${metric("Investors", num(state.investors.length), "♙", "Recorded in the ownership register")}${metric("Largest ownership share", `${topShare.toFixed(2)}%`, "◉", "Based on recorded contributions")}${metric("Average investment", money(averageInvestment), "↗", "Per recorded investor")}</div>
           <section class="panel list-panel"><div class="panel-head"><div><div class="panel-title">Ownership register</div><div class="panel-note">Ownership share is each investor’s contribution divided by total recorded investments.</div></div><input class="search" data-search placeholder="Search investors…" value="${esc(searchTerm)}"></div><div class="list-summary"><span class="summary-chip"><strong>${money(totalInvested)}</strong>total capital</span><span class="summary-chip"><strong>${totalInvested ? "100.00%" : "0.00%"}</strong>allocated ownership</span><span class="summary-chip"><strong>${state.investors.length}</strong>investors</span></div><div class="table-wrap"><table><thead><tr><th>Investor</th><th>Contact</th><th>Amount invested</th><th>Ownership</th><th>Investment date</th><th>Notes</th><th></th></tr></thead><tbody>${body}</tbody></table></div></section>`;
       }
+      const managementFeeRate = 0.3;
+      function renderInvestorRoi() {
+        const months = [...state.investorRoiMonths].sort((a, b) => b.month.localeCompare(a.month));
+        const selected = months.find((record) => record.month === selectedRoiMonth) || months[0] || null;
+        if (selected) selectedRoiMonth = selected.month;
+        const sales = number(selected?.sales);
+        const capital = number(selected?.capital);
+        const fee = sales * managementFeeRate;
+        const distributable = sales - fee;
+        const payouts = selected ? state.investors.map((investor) => {
+          const contribution = selected.investorAmounts && Object.prototype.hasOwnProperty.call(selected.investorAmounts, investor.id)
+            ? number(selected.investorAmounts[investor.id])
+            : number(investor.amount);
+          const ownership = capital > 0 ? contribution / capital * 100 : 0;
+          return { investor, contribution, ownership, payout: distributable * ownership / 100 };
+        }) : [];
+        const payoutRows = payouts.length ? payouts.map(({ investor, contribution, ownership, payout }) =>
+          `<tr><td class="strong-cell">${esc(investor.name)}</td><td>${money(contribution)}</td><td>${ownership.toFixed(2)}%</td><td class="strong-cell">${money(payout)}</td></tr>`
+        ).join("") : `<tr><td class="empty-state" colspan="4">${state.investors.length ? "Select or record a month to calculate investor distributions." : "Add investors in the Investors section to calculate individual distributions."}</td></tr>`;
+        const historyRows = months.length ? months.map((record) => {
+          const monthSales = number(record.sales);
+          const monthFee = monthSales * managementFeeRate;
+          const monthDistributable = monthSales - monthFee;
+          return `<tr><td class="strong-cell">${esc(new Date(`${record.month}-15T12:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" }))}</td><td>${money(record.capital)}</td><td>${money(monthSales)}</td><td>${money(monthFee)}</td><td class="strong-cell">${money(monthDistributable)}</td><td><button class="button secondary small" data-action="select-roi-month" data-month="${esc(record.month)}">${selected?.month === record.month ? "Selected" : "View"}</button> <button class="button secondary small" data-action="edit-roi-month" data-month="${esc(record.month)}">Edit</button></td></tr>`;
+        }).join("") : `<tr><td class="empty-state" colspan="6">No monthly sales recorded yet. Record a month to calculate investor distributions.</td></tr>`;
+        const currentMonth = dateISO(today).slice(0, 7);
+        const currentRecord = months.find((record) => record.month === currentMonth);
+        const action = `<button class="button" data-action="edit-roi-month" data-month="${currentMonth}"><span>＋</span> ${currentRecord ? "Update this month" : "Record this month"}</button>`;
+        return `${heading("Monthly investor distributions", "Investor ROI", "Enter each month’s total company capital and sales to calculate investor ownership and distributions.", action)}
+          <div class="metrics">${metric("Month", selected ? new Date(`${selected.month}-15T12:00:00`).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—", "◷", selected ? "Selected calculation period" : "No month recorded")}${metric("Monthly sales", money(sales), "↗", "Company sales for selected month")}${metric("Management fee · 30%", money(fee), "＄", "Deducted from monthly sales")}${metric("Available to distribute", money(distributable), "％", "Sales remaining after management fee")}</div>
+          <div class="alert-banner" style="margin-bottom:16px"><span class="alert-icon">ⓘ</span><div><strong>How the calculation works</strong><p>Ownership = investor contribution ÷ that month’s company capital. The management fee is 30% of monthly sales; each payout = (monthly sales − management fee) × ownership. Capital, sales and investor contributions are saved as monthly snapshots.</p></div></div>
+          <section class="panel list-panel"><div class="panel-head"><div><div class="panel-title">Investor distributions${selected ? ` · ${esc(new Date(`${selected.month}-15T12:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" }))}` : ""}</div><div class="panel-note">Ownership is calculated against the selected month’s total company capital.</div></div></div><div class="list-summary"><span class="summary-chip"><strong>${money(capital)}</strong>company capital</span><span class="summary-chip"><strong>${money(fee)}</strong>management fee</span><span class="summary-chip"><strong>${money(distributable)}</strong>distribution pool</span></div><div class="table-wrap"><table><thead><tr><th>Investor</th><th>Contribution</th><th>Ownership</th><th>Monthly payout</th></tr></thead><tbody>${payoutRows}</tbody></table></div></section>
+          <section class="panel list-panel" style="margin-top:16px"><div class="panel-head"><div><div class="panel-title">Monthly records</div><div class="panel-note">Saved monthly capital, sales and investor contribution figures with the corresponding fee and distribution pool.</div></div></div><div class="table-wrap"><table><thead><tr><th>Month</th><th>Company capital</th><th>Total sales</th><th>Management fee</th><th>Distribution pool</th><th></th></tr></thead><tbody>${historyRows}</tbody></table></div></section>`;
+      }
       function renderFinance() {
         const categories = [...new Set(state.expenses.map((e) => e.category))];
         const expenseRows = categories.map((category) => {
@@ -545,8 +582,8 @@
         return `${heading("Manage farm access", "Team", "Only you, as the primary manager, can invite other managers and assistant managers.", `<button class="button" data-action="invite-member"><span>＋</span> Invite a team member</button>`)}
           <section class="panel"><div class="panel-head"><div><div class="panel-title">Farm team</div><div class="panel-note">Managers and assistants can view and edit farm records. Only the primary manager can manage the team.</div></div></div><div id="team-status" class="empty-state">Loading team members…</div><div class="table-wrap" id="team-table"></div></section>`;
       }
-      const pageRenderers = { dashboard: renderDashboard, flocks: renderFlocks, production: renderProduction, sales: renderSales, inventory: renderInventory, health: renderHealth, finance: renderFinance, investors: renderInvestors, reports: renderReports, team: renderTeam };
-      const pageInfo = { dashboard: ["Overview","Farm overview"], flocks: ["Flocks","Flock management"], production: ["Egg production","Daily egg collection"], sales: ["Egg sales","Sales ledger"], inventory: ["Feed & inventory","Stock management"], health: ["Health & care","Health register"], finance: ["Expenses & profit","Farm finances"], investors: ["Investors","Company ownership"], reports: ["Reports","Farm reports"], team: ["Team","Farm team"] };
+      const pageRenderers = { dashboard: renderDashboard, flocks: renderFlocks, production: renderProduction, sales: renderSales, inventory: renderInventory, health: renderHealth, finance: renderFinance, investors: renderInvestors, "investor-roi": renderInvestorRoi, reports: renderReports, team: renderTeam };
+      const pageInfo = { dashboard: ["Overview","Farm overview"], flocks: ["Flocks","Flock management"], production: ["Egg production","Daily egg collection"], sales: ["Egg sales","Sales ledger"], inventory: ["Feed & inventory","Stock management"], health: ["Health & care","Health register"], finance: ["Expenses & profit","Farm finances"], investors: ["Investors","Company ownership"], "investor-roi": ["Investor ROI","Monthly investor distributions"], reports: ["Reports","Farm reports"], team: ["Team","Farm team"] };
       function render() {
         if (currentPage === "team" && !isPrimaryManager) currentPage = "dashboard";
         $("#content").innerHTML = (pageRenderers[currentPage] || renderDashboard)();
@@ -688,7 +725,7 @@
       }
       function normalizeFarmData(data) {
         const normalized = data && typeof data === "object" ? data : initialState();
-        ["flocks","collections","sales","otherIncome","inventory","health","expenses","feedings","investors"].forEach((key) => {
+        ["flocks","collections","sales","otherIncome","inventory","health","expenses","feedings","investors","investorRoiMonths"].forEach((key) => {
           if (!Array.isArray(normalized[key])) normalized[key] = [];
         });
         if (typeof normalized.currency !== "string") normalized.currency = "NGN";
@@ -1023,6 +1060,35 @@
           return "";
         });
       }
+      function investorRoiMonthForm(month) {
+        const existing = state.investorRoiMonths.find((record) => record.month === month);
+        openModal(existing ? "Update monthly ROI" : "Record monthly ROI", "Enter the company's total capital and total sales for this month. Saving again for the same month updates its figures.", [
+          field("month","Month","month",{value:existing?.month || month}),
+          field("capital","Total company capital","number",{value:existing?.capital ?? "",min:0.01,step:"0.01",placeholder:"0.00"}),
+          field("sales","Total sales for the month","number",{value:existing?.sales ?? "",min:0,step:"0.01",placeholder:"0.00"})
+        ],existing ? "Update month" : "Save month",(values) => {
+          const targetMonth = String(values.month || "");
+          if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(targetMonth)) return "Choose a valid month.";
+          const capital = number(values.capital);
+          if (capital <= 0) return "Total company capital must be greater than zero.";
+          const existingIndex = state.investorRoiMonths.findIndex((item) => item.month === month);
+          const targetIndex = state.investorRoiMonths.findIndex((item) => item.month === targetMonth);
+          if (targetIndex >= 0 && targetIndex !== existingIndex) return "A record already exists for that month. Edit the existing monthly record instead.";
+          const record = {
+            month:targetMonth,
+            capital,
+            sales:number(values.sales),
+            investorAmounts:existingIndex >= 0 && state.investorRoiMonths[existingIndex].investorAmounts
+              ? state.investorRoiMonths[existingIndex].investorAmounts
+              : Object.fromEntries(state.investors.map((investor) => [investor.id, number(investor.amount)]))
+          };
+          if (existingIndex >= 0) state.investorRoiMonths[existingIndex] = record;
+          else state.investorRoiMonths.push(record);
+          selectedRoiMonth = targetMonth;
+          toast(`ROI figures saved for ${new Date(`${targetMonth}-15T12:00:00`).toLocaleDateString(undefined, { month:"long", year:"numeric" })}.`);
+          return "";
+        });
+      }
       function exportData() {
         const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
         const url = URL.createObjectURL(blob);
@@ -1070,6 +1136,8 @@
         else if (action === "add-income") addIncome();
         else if (action === "add-investor") investorForm();
         else if (action === "edit-investor") investorForm(state.investors.find((investor) => investor.id === button.dataset.id));
+        else if (action === "edit-roi-month") investorRoiMonthForm(button.dataset.month);
+        else if (action === "select-roi-month") { selectedRoiMonth = button.dataset.month; render(); }
         else if (action === "export-data") exportData();
         else if (action === "mark-paid") {
           const sale = state.sales.find((s) => s.id === button.dataset.id);

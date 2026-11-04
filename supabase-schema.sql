@@ -2,13 +2,13 @@ create table if not exists public.farms (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null unique references auth.users (id) on delete cascade,
   name text not null default 'Lucea''s Poultry Farm',
-  data jsonb not null default '{"flocks":[],"collections":[],"sales":[],"otherIncome":[],"inventory":[],"health":[],"expenses":[],"feedings":[],"investors":[],"currency":"NGN"}'::jsonb,
+  data jsonb not null default '{"flocks":[],"collections":[],"sales":[],"otherIncome":[],"inventory":[],"health":[],"expenses":[],"feedings":[],"investors":[],"investorRoiMonths":[],"currency":"NGN"}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table public.farms
-  alter column data set default '{"flocks":[],"collections":[],"sales":[],"otherIncome":[],"inventory":[],"health":[],"expenses":[],"feedings":[],"investors":[],"currency":"NGN"}'::jsonb;
+  alter column data set default '{"flocks":[],"collections":[],"sales":[],"otherIncome":[],"inventory":[],"health":[],"expenses":[],"feedings":[],"investors":[],"investorRoiMonths":[],"currency":"NGN"}'::jsonb;
 
 create table if not exists public.farm_members (
   farm_id uuid not null references public.farms (id) on delete cascade,
