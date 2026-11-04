@@ -129,3 +129,165 @@ create policy "Primary managers can read farm memberships"
   on public.farm_members for select
   to authenticated
   using (public.is_primary_farm_manager(farm_id));
+
+create or replace function public.assert_original_farm_manager(target_farm_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if lower(coalesce((select auth.jwt() ->> 'email'), '')) <> 'kennedydonmiguel@gmail.com' then
+    raise exception 'Only the original farm manager can delete investor records.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.farm_members m
+    where m.farm_id = target_farm_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'manager'
+      and m.is_primary_manager
+      and lower(m.email) = 'kennedydonmiguel@gmail.com'
+  ) then
+    raise exception 'Only the original primary manager can delete investor records.';
+  end if;
+end;
+$$;
+
+revoke all on function public.assert_original_farm_manager(uuid) from public, anon, authenticated;
+
+create or replace function public.delete_farm_investor(target_farm_id uuid, target_investor_id text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.assert_original_farm_manager(target_farm_id);
+
+  update public.farms f
+  set data = jsonb_set(
+    coalesce(f.data, '{}'::jsonb),
+    '{investors}',
+    coalesce((
+      select jsonb_agg(item.value)
+      from jsonb_array_elements(
+        case when jsonb_typeof(f.data -> 'investors') = 'array'
+          then f.data -> 'investors' else '[]'::jsonb end
+      ) as item(value)
+      where item.value ->> 'id' is distinct from target_investor_id
+    ), '[]'::jsonb),
+    true
+  ),
+  updated_at = now()
+  where f.id = target_farm_id
+    and exists (
+      select 1
+      from jsonb_array_elements(
+        case when jsonb_typeof(f.data -> 'investors') = 'array'
+          then f.data -> 'investors' else '[]'::jsonb end
+      ) as item(value)
+      where item.value ->> 'id' = target_investor_id
+    );
+
+  if not found then
+    raise exception 'The investor was not found.';
+  end if;
+end;
+$$;
+
+create or replace function public.delete_farm_investor_roi_month(target_farm_id uuid, target_month text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.assert_original_farm_manager(target_farm_id);
+
+  update public.farms f
+  set data = jsonb_set(
+    coalesce(f.data, '{}'::jsonb),
+    '{investorRoiMonths}',
+    coalesce((
+      select jsonb_agg(item.value)
+      from jsonb_array_elements(
+        case when jsonb_typeof(f.data -> 'investorRoiMonths') = 'array'
+          then f.data -> 'investorRoiMonths' else '[]'::jsonb end
+      ) as item(value)
+      where item.value ->> 'month' is distinct from target_month
+    ), '[]'::jsonb),
+    true
+  ),
+  updated_at = now()
+  where f.id = target_farm_id
+    and exists (
+      select 1
+      from jsonb_array_elements(
+        case when jsonb_typeof(f.data -> 'investorRoiMonths') = 'array'
+          then f.data -> 'investorRoiMonths' else '[]'::jsonb end
+      ) as item(value)
+      where item.value ->> 'month' = target_month
+    );
+
+  if not found then
+    raise exception 'The monthly ROI record was not found.';
+  end if;
+end;
+$$;
+
+revoke all on function public.delete_farm_investor(uuid, text) from public, anon;
+revoke all on function public.delete_farm_investor_roi_month(uuid, text) from public, anon;
+grant execute on function public.delete_farm_investor(uuid, text) to authenticated;
+grant execute on function public.delete_farm_investor_roi_month(uuid, text) to authenticated;
+
+create or replace function public.guard_farm_investor_deletions()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if exists (
+    select 1
+    from jsonb_array_elements(
+      case when jsonb_typeof(old.data -> 'investors') = 'array'
+        then old.data -> 'investors' else '[]'::jsonb end
+    ) as old_item(value)
+    where not exists (
+      select 1
+      from jsonb_array_elements(
+        case when jsonb_typeof(new.data -> 'investors') = 'array'
+          then new.data -> 'investors' else '[]'::jsonb end
+      ) as new_item(value)
+      where new_item.value ->> 'id' is not distinct from old_item.value ->> 'id'
+    )
+  ) or exists (
+    select 1
+    from jsonb_array_elements(
+      case when jsonb_typeof(old.data -> 'investorRoiMonths') = 'array'
+        then old.data -> 'investorRoiMonths' else '[]'::jsonb end
+    ) as old_item(value)
+    where not exists (
+      select 1
+      from jsonb_array_elements(
+        case when jsonb_typeof(new.data -> 'investorRoiMonths') = 'array'
+          then new.data -> 'investorRoiMonths' else '[]'::jsonb end
+      ) as new_item(value)
+      where new_item.value ->> 'month' is not distinct from old_item.value ->> 'month'
+    )
+  ) then
+    perform public.assert_original_farm_manager(old.id);
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.guard_farm_investor_deletions() from public, anon, authenticated;
+drop trigger if exists guard_farm_investor_deletions on public.farms;
+create trigger guard_farm_investor_deletions
+  before update of data on public.farms
+  for each row
+  execute function public.guard_farm_investor_deletions();

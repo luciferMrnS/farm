@@ -6,7 +6,7 @@ A browser-based layer-farm manager. Run `index.html` directly for local-only use
 
 1. Create a Supabase project.
 2. In **Authentication → Providers**, enable Email. In **Authentication → Settings**, turn off **Allow new users to sign up** so only invited users can create accounts. Configure email delivery and confirmation for invitations.
-3. In the Supabase SQL Editor, run the contents of [`supabase-schema.sql`](./supabase-schema.sql). It creates the team-membership table, migrates existing farm owners to primary managers, and applies row-level security so farm members can access only their farm. It preserves existing farm records; run it again after updating the app's Supabase schema. The Investors page stores investor details and contributions with each farm record. The Investor ROI page saves monthly company-capital, sales and investor-contribution snapshots, then calculates distributions after a 30% management fee.
+3. In the Supabase SQL Editor, run the contents of [`supabase-schema.sql`](./supabase-schema.sql). It creates the team-membership table, migrates existing farm owners to primary managers, and applies row-level security so farm members can access only their farm. It preserves existing farm records; run it again after updating the app's Supabase schema. The Investors page stores investor details and contributions with each farm record. The Investor ROI page saves monthly company-capital, sales and investor-contribution snapshots, then calculates distributions after a 30% management fee. The SQL schema restricts deleting investors or monthly ROI records to the primary manager account `kennedydonmiguel@gmail.com`; these actions require a signed-in Supabase session.
 4. Enter the project's **Project URL** and **anon/public key** in `supabase-config.js`. Use `supabase-config.example.js` as a reference.
 5. Install and configure the Supabase CLI, link this project, then deploy the invitation function from the project directory:
 
@@ -26,3 +26,5 @@ A browser-based layer-farm manager. Run `index.html` directly for local-only use
 The Supabase URL and anon/public key are browser-visible credentials. This is expected: the SQL schema protects farm records and team membership with Supabase Auth and row-level security.
 
 Without Supabase credentials, the app indicates **Local only** and saves in the current browser's local storage. With Supabase configured, a user must be invited to a farm before they can access its records.
+
+Investor ROI reports can be printed or prepared as an email for each investor. Emailing opens the user's configured email application with the report addressed and filled in; the user reviews and sends it. The site does not send emails automatically.
