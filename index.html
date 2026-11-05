@@ -276,6 +276,7 @@
   <div id="overlay-root"></div>
   <script src="./supabase-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
   <script>
     (() => {
       "use strict";
@@ -517,15 +518,23 @@
           <div class="metrics">${metric("Total capital invested", money(totalInvested), "＄", "Across all recorded investors")}${metric("Investors", num(state.investors.length), "♙", "Recorded in the ownership register")}${metric("Largest ownership share", `${topShare.toFixed(2)}%`, "◉", "Based on recorded contributions")}${metric("Average investment", money(averageInvestment), "↗", "Per recorded investor")}</div>
           <section class="panel list-panel"><div class="panel-head"><div><div class="panel-title">Ownership register</div><div class="panel-note">Ownership share is each investor’s contribution divided by total recorded investments.</div></div><input class="search" data-search placeholder="Search investors…" value="${esc(searchTerm)}"></div><div class="list-summary"><span class="summary-chip"><strong>${money(totalInvested)}</strong>total capital</span><span class="summary-chip"><strong>${totalInvested ? "100.00%" : "0.00%"}</strong>allocated ownership</span><span class="summary-chip"><strong>${state.investors.length}</strong>investors</span></div><div class="table-wrap"><table><thead><tr><th>Investor</th><th>Email</th><th>Contact</th><th>Amount invested</th><th>Ownership</th><th>Investment date</th><th>Notes</th><th></th></tr></thead><tbody>${body}</tbody></table></div></section>`;
       }
-      const managementFeeRate = 0.3;
+      const managementFeeRate = 0.2;
+      const feeRateFor = (record) => record?.managementFeeRate === undefined ? 0.3 : number(record.managementFeeRate);
       function renderInvestorRoi() {
         const months = [...state.investorRoiMonths].sort((a, b) => b.month.localeCompare(a.month));
         const selected = months.find((record) => record.month === selectedRoiMonth) || months[0] || null;
         if (selected) selectedRoiMonth = selected.month;
         const sales = number(selected?.sales);
         const capital = number(selected?.capital);
-        const fee = sales * managementFeeRate;
-        const distributable = sales - fee;
+        const feedCost = number(selected?.feedCost);
+        const afterFeed = Math.max(0, sales - feedCost);
+        const feedShortfall = Math.max(0, feedCost - sales);
+        const feeRate = feeRateFor(selected);
+        const fee = afterFeed * feeRate;
+        const distributable = afterFeed - fee;
+        const feedShortfallNotice = feedShortfall > 0
+          ? `<div class="alert-banner" style="margin-bottom:16px"><span class="alert-icon">!</span><div><strong>Feed budget exceeds sales</strong><p>Sales are short by ${money(feedShortfall)}. No management fee or investor distribution is calculated until the feed budget is covered.</p></div></div>`
+          : "";
         const reportInvestors = selected?.investorDetails
           ? selected.investorDetails.map((investor) => {
             const currentInvestor = state.investors.find((item) => item.id === investor.id);
@@ -548,22 +557,25 @@
         }) : [];
         const payoutRows = payouts.length ? payouts.map(({ investor, contribution, ownership, payout }) => {
           const validEmail = isValidEmail(investor.email);
-          return `<tr><td class="strong-cell">${esc(investor.name)}</td><td>${money(contribution)}</td><td>${ownership.toFixed(2)}%</td><td class="strong-cell">${money(payout)}</td><td><div class="report-actions"><button class="button secondary small" data-action="print-investor-report" data-investor-id="${esc(investor.id)}">Print report</button><button class="button secondary small" data-action="email-investor-report" data-investor-id="${esc(investor.id)}" ${validEmail ? "" : "disabled title=\"Add a valid email address to this investor first\""}>Email report</button></div></td></tr>`;
+          return `<tr><td class="strong-cell">${esc(investor.name)}</td><td>${money(contribution)}</td><td>${ownership.toFixed(2)}%</td><td class="strong-cell">${money(payout)}</td><td><div class="report-actions"><button class="button secondary small" data-action="print-investor-report" data-investor-id="${esc(investor.id)}">Print report</button><button class="button secondary small" data-action="email-investor-report" data-investor-id="${esc(investor.id)}" ${validEmail ? "" : "disabled title=\"Add a valid email address to this investor first\""}>Email PDF</button></div></td></tr>`;
         }).join("") : `<tr><td class="empty-state" colspan="5">${state.investors.length ? "Select or record a month to calculate investor distributions." : "Add investors in the Investors section to calculate individual distributions."}</td></tr>`;
         const historyRows = months.length ? months.map((record) => {
           const monthSales = number(record.sales);
-          const monthFee = monthSales * managementFeeRate;
-          const monthDistributable = monthSales - monthFee;
-          return `<tr><td class="strong-cell">${esc(new Date(`${record.month}-15T12:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" }))}</td><td>${money(record.capital)}</td><td>${money(monthSales)}</td><td>${money(monthFee)}</td><td class="strong-cell">${money(monthDistributable)}</td><td><div class="report-actions"><button class="button secondary small" data-action="select-roi-month" data-month="${esc(record.month)}">${selected?.month === record.month ? "Selected" : "View"}</button><button class="button secondary small" data-action="edit-roi-month" data-month="${esc(record.month)}">Edit</button>${canDeleteInvestorRecords() ? `<button class="button secondary small" data-action="delete-roi-month" data-month="${esc(record.month)}">Delete</button>` : ""}</div></td></tr>`;
-        }).join("") : `<tr><td class="empty-state" colspan="6">No monthly sales recorded yet. Record a month to calculate investor distributions.</td></tr>`;
+          const monthFeedCost = number(record.feedCost);
+          const monthAfterFeed = Math.max(0, monthSales - monthFeedCost);
+          const monthFee = monthAfterFeed * feeRateFor(record);
+          const monthDistributable = monthAfterFeed - monthFee;
+          return `<tr><td class="strong-cell">${esc(new Date(`${record.month}-15T12:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" }))}</td><td>${money(record.capital)}</td><td>${money(monthSales)}</td><td>${money(monthFeedCost)}</td><td>${money(monthFee)} (${(feeRateFor(record) * 100).toFixed(0)}%)</td><td class="strong-cell">${money(monthDistributable)}</td><td><div class="report-actions"><button class="button secondary small" data-action="select-roi-month" data-month="${esc(record.month)}">${selected?.month === record.month ? "Selected" : "View"}</button><button class="button secondary small" data-action="edit-roi-month" data-month="${esc(record.month)}">Edit</button>${canDeleteInvestorRecords() ? `<button class="button secondary small" data-action="delete-roi-month" data-month="${esc(record.month)}">Delete</button>` : ""}</div></td></tr>`;
+        }).join("") : `<tr><td class="empty-state" colspan="7">No monthly sales recorded yet. Record a month to calculate investor distributions.</td></tr>`;
         const currentMonth = dateISO(today).slice(0, 7);
         const currentRecord = months.find((record) => record.month === currentMonth);
         const action = `<button class="button" data-action="edit-roi-month" data-month="${currentMonth}"><span>＋</span> ${currentRecord ? "Update this month" : "Record this month"}</button>`;
-        return `${heading("Monthly investor distributions", "Investor ROI", "Enter each month’s total company capital and sales to calculate investor ownership and distributions.", action)}
-          <div class="metrics">${metric("Month", selected ? new Date(`${selected.month}-15T12:00:00`).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—", "◷", selected ? "Selected calculation period" : "No month recorded")}${metric("Monthly sales", money(sales), "↗", "Company sales for selected month")}${metric("Management fee · 30%", money(fee), "＄", "Deducted from monthly sales")}${metric("Available to distribute", money(distributable), "％", "Sales remaining after management fee")}</div>
-          <div class="alert-banner" style="margin-bottom:16px"><span class="alert-icon">ⓘ</span><div><strong>How the calculation works</strong><p>Ownership = investor contribution ÷ that month’s company capital. The management fee is 30% of monthly sales; each payout = (monthly sales − management fee) × ownership. Capital, sales and investor contributions are saved as monthly snapshots.</p></div></div>
-          <section class="panel list-panel"><div class="panel-head"><div><div class="panel-title">Investor distributions${selected ? ` · ${esc(new Date(`${selected.month}-15T12:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" }))}` : ""}</div><div class="panel-note">Ownership is calculated against the selected month’s total company capital. Print a detailed report or prepare an email for each investor.</div></div></div><div class="list-summary"><span class="summary-chip"><strong>${money(capital)}</strong>company capital</span><span class="summary-chip"><strong>${money(fee)}</strong>management fee</span><span class="summary-chip"><strong>${money(distributable)}</strong>distribution pool</span></div><div class="table-wrap"><table><thead><tr><th>Investor</th><th>Contribution</th><th>Ownership</th><th>Monthly payout</th><th>Report</th></tr></thead><tbody>${payoutRows}</tbody></table></div></section>
-          <section class="panel list-panel" style="margin-top:16px"><div class="panel-head"><div><div class="panel-title">Monthly records</div><div class="panel-note">Saved monthly capital, sales and investor contribution figures with the corresponding fee and distribution pool.</div></div></div><div class="table-wrap"><table><thead><tr><th>Month</th><th>Company capital</th><th>Total sales</th><th>Management fee</th><th>Distribution pool</th><th></th></tr></thead><tbody>${historyRows}</tbody></table></div></section>`;
+        return `${heading("Monthly investor distributions", "Investor ROI", "Enter monthly company capital, sales and next month's feed budget to calculate investor ownership and distributions.", action)}
+          <div class="metrics">${metric("Month", selected ? new Date(`${selected.month}-15T12:00:00`).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—", "◷", selected ? "Selected calculation period" : "No month recorded")}${metric("Monthly sales", money(sales), "↗", "Company sales for selected month")}${metric("Next month's feed budget", money(feedCost), "▤", "Set aside from sales")}${metric(`Management fee · ${(feeRate * 100).toFixed(0)}%`, money(fee), "＄", `${(feeRate * 100).toFixed(0)}% after feed is set aside`)}</div>
+          <div class="alert-banner" style="margin-bottom:16px"><span class="alert-icon">ⓘ</span><div><strong>How investor distributions are calculated</strong><p>Set aside the amount needed to feed the flock next month from this month’s sales. The management fee shown above is deducted from the sales remaining after feed; investors share the rest according to ownership: contribution ÷ total company capital. New and updated monthly records use a 20% management fee. Existing saved months retain their original fee rate until edited. Feed budget, fee rate, capital, sales and investor contributions are saved as monthly snapshots.</p></div></div>
+          ${feedShortfallNotice}
+          <section class="panel list-panel"><div class="panel-head"><div><div class="panel-title">Investor distributions${selected ? ` · ${esc(new Date(`${selected.month}-15T12:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" }))}` : ""}</div><div class="panel-note">Ownership is calculated against the selected month’s total company capital. Email PDF shares an attached file where supported; otherwise, attach the downloaded PDF to your email draft.</div></div></div><div class="list-summary"><span class="summary-chip"><strong>${money(capital)}</strong>company capital</span><span class="summary-chip"><strong>${money(feedCost)}</strong>next month's feed</span><span class="summary-chip"><strong>${money(fee)}</strong>management fee</span><span class="summary-chip"><strong>${money(distributable)}</strong>investor pool</span></div><div class="table-wrap"><table><thead><tr><th>Investor</th><th>Contribution</th><th>Ownership</th><th>Monthly payout</th><th>Report</th></tr></thead><tbody>${payoutRows}</tbody></table></div></section>
+          <section class="panel list-panel" style="margin-top:16px"><div class="panel-head"><div><div class="panel-title">Monthly records</div><div class="panel-note">Saved monthly capital, sales, next-month feed budgets and investor contribution figures.</div></div></div><div class="table-wrap"><table><thead><tr><th>Month</th><th>Company capital</th><th>Total sales</th><th>Next month's feed</th><th>Management fee</th><th>Investor pool</th><th></th></tr></thead><tbody>${historyRows}</tbody></table></div></section>`;
       }
       function renderFinance() {
         const categories = [...new Set(state.expenses.map((e) => e.category))];
@@ -1083,10 +1095,11 @@
       }
       function investorRoiMonthForm(month) {
         const existing = state.investorRoiMonths.find((record) => record.month === month);
-        openModal(existing ? "Update monthly ROI" : "Record monthly ROI", "Enter the company's total capital and total sales for this month. Saving again for the same month updates its figures.", [
+        openModal(existing ? "Update monthly ROI" : "Record monthly ROI", "Enter the company's capital and monthly sales, plus the amount to set aside for next month's flock feed.", [
           field("month","Month","month",{value:existing?.month || month}),
           field("capital","Total company capital","number",{value:existing?.capital ?? "",min:0.01,step:"0.01",placeholder:"0.00"}),
-          field("sales","Total sales for the month","number",{value:existing?.sales ?? "",min:0,step:"0.01",placeholder:"0.00"})
+          field("sales","Total sales for the month","number",{value:existing?.sales ?? "",min:0,step:"0.01",placeholder:"0.00"}),
+          field("feedCost","Feed budget for next month","number",{value:existing?.feedCost ?? "",min:0,step:"0.01",placeholder:"0.00"})
         ],existing ? "Update month" : "Save month",(values) => {
           const targetMonth = String(values.month || "");
           if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(targetMonth)) return "Choose a valid month.";
@@ -1101,6 +1114,8 @@
             month:targetMonth,
             capital,
             sales:number(values.sales),
+            feedCost:number(values.feedCost),
+            managementFeeRate,
             investorAmounts:previousInvestorAmounts
               ? previousInvestorAmounts
               : Object.fromEntries(state.investors.map((investor) => [investor.id, number(investor.amount)])),
@@ -1140,14 +1155,22 @@
           record.investorAmounts?.[investorId] ??
           investor.amount;
         const sales = number(record.sales);
-        const fee = sales * managementFeeRate;
-        const distributable = sales - fee;
+        const feedCost = number(record.feedCost);
+        const afterFeed = Math.max(0, sales - feedCost);
+        const feedShortfall = Math.max(0, feedCost - sales);
+        const feeRate = feeRateFor(record);
+        const fee = afterFeed * feeRate;
+        const distributable = afterFeed - fee;
         const ownership = number(record.capital) > 0 ? number(contribution) / number(record.capital) * 100 : 0;
         return {
           record,
           investor,
           contribution:number(contribution),
           sales,
+          feedCost,
+          afterFeed,
+          feedShortfall,
+          feeRate,
           fee,
           distributable,
           ownership,
@@ -1172,13 +1195,127 @@
           "",
           "MONTHLY DISTRIBUTION",
           `Total company sales: ${money(report.sales)}`,
-          `Management fee (30%): ${money(report.fee)}`,
-          `Available for distribution: ${money(report.sales)} − ${money(report.fee)} = ${money(report.distributable)}`,
+          `Feed budget set aside for next month: ${money(report.feedCost)}`,
+          `Sales remaining after feed: ${money(report.afterFeed)}`,
+          ...(report.feedShortfall > 0 ? [`Feed funding shortfall: ${money(report.feedShortfall)}`] : []),
+          `Management fee (${(report.feeRate * 100).toFixed(0)}% of sales after feed): ${money(report.fee)}`,
+          `Investor distribution pool: ${money(report.distributable)}`,
           `Expected investor distribution: ${money(report.distributable)} × ${report.ownership.toFixed(2)}% = ${money(report.payout)}`,
+          "",
+          `The next month's feed budget is deducted from sales first. Management receives ${(report.feeRate * 100).toFixed(0)}% of the remaining sales, and the rest is shared among investors according to ownership percentage.`,
           "",
           "This is an estimated distribution based on the monthly figures recorded by farm management. It is not confirmation that payment has been made.",
           "Please contact farm management if you have questions about this report."
         ].join("\n");
+      }
+      function createInvestorRoiPdf(report) {
+        const PdfDocument = window.jspdf?.jsPDF;
+        if (!PdfDocument) throw new Error("The PDF generator could not load. Check your internet connection and try again.");
+        const pdf = new PdfDocument({ unit: "pt", format: "a4" });
+        const margin = 48;
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const right = pageWidth - margin;
+        let y = margin;
+        const safeText = (value) => String(value ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "?");
+        const pdfMoney = (value) => `NGN ${new Intl.NumberFormat("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(number(value))}`;
+        const ensureSpace = (height) => {
+          if (y + height > pageHeight - margin) {
+            pdf.addPage();
+            y = margin;
+          }
+        };
+        const section = (title) => {
+          ensureSpace(38);
+          y += 14;
+          pdf.setDrawColor(225, 232, 224);
+          pdf.line(margin, y, right, y);
+          y += 21;
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(12);
+          pdf.setTextColor(36, 76, 56);
+          pdf.text(safeText(title), margin, y);
+          y += 14;
+        };
+        const row = (label, value, strong = false) => {
+          ensureSpace(24);
+          pdf.setFont("helvetica", strong ? "bold" : "normal");
+          pdf.setFontSize(10);
+          pdf.setTextColor(28, 42, 33);
+          pdf.text(safeText(label), margin, y);
+          const valueLines = pdf.splitTextToSize(safeText(value), 235);
+          pdf.text(valueLines, right, y, { align: "right" });
+          y += Math.max(19, valueLines.length * 12);
+        };
+        const note = (text) => {
+          const lines = pdf.splitTextToSize(safeText(text), pageWidth - margin * 2);
+          ensureSpace(lines.length * 13 + 18);
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(9);
+          pdf.setTextColor(93, 105, 96);
+          pdf.text(lines, margin, y);
+          y += lines.length * 13 + 8;
+        };
+        const period = new Date(`${report.record.month}-15T12:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(10);
+        pdf.setTextColor(36, 76, 56);
+        pdf.text(safeText(FARM_NAME.toUpperCase()), margin, y);
+        y += 27;
+        pdf.setFontSize(20);
+        pdf.setTextColor(28, 42, 33);
+        pdf.text("Monthly Investor ROI Report", margin, y);
+        y += 20;
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(10);
+        pdf.setTextColor(101, 113, 104);
+        pdf.text(safeText(`Reporting period: ${period}  |  Prepared: ${new Date().toLocaleDateString()}`), margin, y);
+        y += 18;
+
+        section("Investor details");
+        row("Investor", report.investor.name);
+        row("Email", report.investor.email || "Not recorded");
+        row("Capital contribution", pdfMoney(report.contribution));
+        row("Total company capital", pdfMoney(report.record.capital));
+        row("Ownership percentage", `${report.ownership.toFixed(2)}%`, true);
+
+        section("Monthly sales and distribution");
+        row("Total company sales", pdfMoney(report.sales));
+        row("Feed budget set aside for next month", `- ${pdfMoney(report.feedCost)}`);
+        row("Sales remaining after feed", pdfMoney(report.afterFeed));
+        if (report.feedShortfall > 0) row("Feed budget shortfall", pdfMoney(report.feedShortfall));
+        row(`Management fee (${report.feeRate * 100}% of sales after feed)`, `- ${pdfMoney(report.fee)}`);
+        row("Investor distribution pool", pdfMoney(report.distributable), true);
+        row(`Expected investor distribution (${report.ownership.toFixed(2)}%)`, pdfMoney(report.payout), true);
+
+        section("How this is calculated");
+        note(`The next month's feed budget is deducted from total sales first. Management receives a ${report.feeRate * 100}% fee from the sales remaining after feed. The remaining ${100 - report.feeRate * 100}% is shared among investors according to ownership percentage (investor contribution divided by total company capital).`);
+        note("This is an estimated distribution based on the monthly figures recorded by farm management. It is not confirmation that payment has been made. Please contact farm management with any questions.");
+
+        const safeName = safeText(report.investor.name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "investor";
+        const fileName = `${safeName}-${report.record.month}-roi-report.pdf`;
+        return { blob: pdf.output("blob"), fileName, period };
+      }
+      function downloadPdfFile(file) {
+        const url = URL.createObjectURL(file);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = file.name;
+        document.body.append(link);
+        link.click();
+        setTimeout(() => {
+          link.remove();
+          URL.revokeObjectURL(url);
+        }, 1000);
+      }
+      function canSharePdfFile(file) {
+        try {
+          return Boolean(navigator.share && navigator.canShare?.({ files: [file] }));
+        } catch (error) {
+          console.error("Could not check PDF sharing support:", error);
+          return false;
+        }
       }
       function printInvestorRoiReport(month, investorId) {
         let report;
@@ -1195,10 +1332,10 @@
         }
         const title = `${report.investor.name} · ${report.record.month} ROI report`;
         printWindow.document.open();
-        printWindow.document.write(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title><style>body{font-family:Arial,sans-serif;color:#1c2a21;max-width:760px;margin:48px auto;padding:0 24px;line-height:1.55}.brand{color:#183c2b;font-size:13px;font-weight:bold;letter-spacing:1px;text-transform:uppercase}.period{color:#78827a}.section{margin-top:28px;padding-top:12px;border-top:1px solid #e8ebe4}h1{font-size:27px;margin:8px 0}.row{display:flex;justify-content:space-between;gap:24px;padding:8px 0;border-bottom:1px solid #f0f2ee}.formula{font-size:12px;color:#657168;margin-top:3px}.notice{margin-top:28px;padding:14px;background:#f3f6ed;border-radius:8px;font-size:12px}@media print{body{margin:0 auto;padding:0}.notice{break-inside:avoid}}</style></head><body><div class="brand">${esc(FARM_NAME)}</div><h1>Monthly Investor ROI Report</h1><div class="period">Reporting period: ${esc(new Date(`${report.record.month}-15T12:00:00`).toLocaleDateString(undefined, { month:"long", year:"numeric" }))} · Prepared ${esc(new Date().toLocaleDateString())}</div><section class="section"><h2>Investor details</h2><div class="row"><span>Investor</span><strong>${esc(report.investor.name)}</strong></div><div class="row"><span>Email</span><strong>${esc(report.investor.email || "Not recorded")}</strong></div><div class="row"><span>Capital contribution</span><strong>${esc(money(report.contribution))}</strong></div><div class="row"><span>Total company capital</span><strong>${esc(money(report.record.capital))}</strong></div><div class="formula">Ownership = contribution ÷ total company capital</div><div class="row"><span>Ownership percentage</span><strong>${report.ownership.toFixed(2)}%</strong></div></section><section class="section"><h2>Monthly sales and distribution</h2><div class="row"><span>Total company sales</span><strong>${esc(money(report.sales))}</strong></div><div class="row"><span>Management fee (30%)</span><strong>− ${esc(money(report.fee))}</strong></div><div class="row"><span>Available for distribution</span><strong>${esc(money(report.distributable))}</strong></div><div class="formula">Expected distribution = available distribution × ownership percentage</div><div class="row"><span>Expected investor distribution</span><strong>${esc(money(report.payout))}</strong></div></section><div class="notice">This is an estimated distribution based on the monthly figures recorded by farm management. It is not confirmation that payment has been made. Please contact farm management if you have questions about this report.</div><script>window.addEventListener("load",()=>window.print());<\\/script></body></html>`);
+        printWindow.document.write(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title><style>body{font-family:Arial,sans-serif;color:#1c2a21;max-width:760px;margin:48px auto;padding:0 24px;line-height:1.7}h1{color:#183c2b;font-size:22px}pre{white-space:pre-wrap;font:13px/1.7 Arial,sans-serif}@media print{body{margin:0 auto;padding:0}}</style></head><body><h1>${esc(FARM_NAME)} · Monthly Investor ROI Report</h1><pre>${esc(investorRoiReportText(report))}</pre><script>window.addEventListener("load",()=>window.print());<\\/script></body></html>`);
         printWindow.document.close();
       }
-      function emailInvestorRoiReport(month, investorId) {
+      async function emailInvestorRoiReport(month, investorId) {
         let report;
         try {
           report = getInvestorRoiReport(month, investorId);
@@ -1211,10 +1348,31 @@
           toast("Add a valid email address to this investor first.");
           return;
         }
-        const period = new Date(`${report.record.month}-15T12:00:00`).toLocaleDateString(undefined, { month:"long", year:"numeric" });
-        const link = document.createElement("a");
-        link.href = `mailto:${encodeURIComponent(email).replace(/%40/gi, "@")}?subject=${encodeURIComponent(`${FARM_NAME} · ${period} ROI report`)}&body=${encodeURIComponent(investorRoiReportText(report))}`;
-        link.click();
+        try {
+          const pdf = createInvestorRoiPdf(report);
+          const file = new File([pdf.blob], pdf.fileName, { type: "application/pdf" });
+          if (canSharePdfFile(file)) {
+            try {
+              await navigator.share({
+                files: [file],
+                title: `${FARM_NAME} · ${pdf.period} ROI report`,
+                text: `Monthly investor report for ${pdf.period}.`
+              });
+              return;
+            } catch (error) {
+              if (error.name === "AbortError") return;
+              console.error("Could not share the investor PDF:", error);
+            }
+          }
+          downloadPdfFile(file);
+          const subject = `${FARM_NAME} · ${pdf.period} ROI report`;
+          const body = `Hello ${report.investor.name},%0D%0A%0D%0APlease find your monthly investor report attached as a PDF.%0D%0A%0D%0AThe PDF has been downloaded. Please attach ${pdf.fileName} before sending this email.%0D%0A%0D%0ARegards,%0D%0A${FARM_NAME}`;
+          window.location.href = `mailto:${encodeURIComponent(email).replace(/%40/gi, "@")}?subject=${encodeURIComponent(subject)}&body=${body}`;
+          toast("The PDF was downloaded. Attach it to the email draft before sending.");
+        } catch (error) {
+          console.error("Could not prepare the investor PDF:", error);
+          toast(error.message || "Could not prepare the investor PDF.");
+        }
       }
       async function deleteInvestor(investorId) {
         if (!canDeleteInvestorRecords()) {
