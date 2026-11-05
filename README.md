@@ -27,4 +27,4 @@ The Supabase URL and anon/public key are browser-visible credentials. This is ex
 
 Without Supabase credentials, the app indicates **Local only** and saves in the current browser's local storage. With Supabase configured, a user must be invited to a farm before they can access its records.
 
-Investor ROI reports can be printed or emailed as PDFs. Where the device supports file sharing, **Email PDF** opens the share sheet with the report attached. Otherwise, the app downloads the PDF and opens an email draft; attach the downloaded PDF before sending. The app does not send emails automatically.
+Investor ROI reports can be printed or emailed as PDFs. **Email PDF** downloads a PDF named after the investor and opens a draft in the device's default email service, with the full report in the message body. Attach the downloaded PDF before sending. The app cannot attach local files to an email draft or send emails automatically.
