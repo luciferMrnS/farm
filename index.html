@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#183c2b">
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="manifest" href="./manifest.webmanifest">
   <title>Fieldnote — Poultry farm manager</title>
   <style>
     :root {
@@ -71,6 +72,7 @@
     h1 { margin: 0; font-size: clamp(24px, 3vw, 31px); letter-spacing: -1.1px; line-height: 1.14; }
     .subtitle { color: var(--muted); margin: 8px 0 0; font-size: 13px; }
     .button { border: 0; border-radius: 8px; background: var(--forest); color: white; padding: 11px 15px; font-size: 12px; font-weight: 650; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 3px 8px rgba(24,60,43,.12); transition: transform .12s, background .12s; white-space: nowrap; }
+    .install-app-button[hidden] { display: none; }
     .button:hover { background: var(--forest-2); transform: translateY(-1px); }
     .button.secondary { color: var(--forest); background: white; border: 1px solid var(--line); box-shadow: none; }
     .button.secondary:hover { background: #f8faf5; }
@@ -202,6 +204,8 @@
       .date-pill { display: none; }
       .top-actions { gap: 9px; }
       .sync-status { display: none; }
+      .install-app-button { min-width: 37px; min-height: 37px; justify-content: center; padding: 8px !important; }
+      .install-app-label { display: none; }
       .content { padding: 25px 15px 35px; }
       .page-heading { align-items: flex-start; flex-direction: column; }
       .page-heading .toolbar { width: 100%; }
@@ -221,6 +225,9 @@
     }
     @media (max-width: 410px) {
       .button { padding: 10px 11px; font-size: 11px; }
+      .top-actions { gap: 6px; }
+      .install-app-button { min-width: 30px; min-height: 32px; padding: 6px !important; }
+      #currency-button { padding-left: 8px; padding-right: 8px; }
       .metric-icon { width: 27px; height: 27px; }
       .form-grid { grid-template-columns: 1fr; }
       .field.full { grid-column: auto; }
@@ -265,6 +272,7 @@
         <div class="top-actions">
           <div class="date-pill"><span>◷</span><span id="today-label"></span></div>
           <span class="sync-status" id="sync-status">Local only</span>
+          <button class="button secondary small install-app-button" id="install-app-button" type="button" aria-label="Install Fieldnote app" hidden><span aria-hidden="true">↓</span><span class="install-app-label">Install app</span></button>
           <button class="button secondary small" id="account-button" title="Cloud storage status">Local only</button>
           <button class="button secondary small" id="currency-button" title="Change farm currency">NGN</button>
           <button class="icon-button" id="alerts-button" aria-label="View inventory alerts">♧<span class="dot"></span></button>
@@ -300,6 +308,7 @@
       let memberRole = null;
       let isPrimaryManager = false;
       let requiresPasswordSetup = false;
+      let deferredInstallPrompt = null;
       let teamMembers = [];
       let loadingUserId = null;
       let cloudSyncChain = Promise.resolve();
@@ -695,7 +704,44 @@
         account.title = currentUser ? `Signed in as ${currentUser.email || currentUser.id}` : cloudConfigured ? "Sign in to cloud storage" : "Supabase is not configured";
         $(".farm-location").textContent = `Layer farm · ${currentUser ? "Supabase cloud" : "Local workspace"}`;
         $("#team-nav").hidden = !isPrimaryManager;
+        const installButton = $("#install-app-button");
+        const appInstalled = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+        const canInstall = !cloudConfigured || Boolean(currentUser && farmId && !requiresPasswordSetup && !$(".auth-screen"));
+        installButton.hidden = !canInstall || !window.isSecureContext || !("serviceWorker" in navigator) || appInstalled;
       }
+      function showInstallInstructions() {
+        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        const instructions = isIOS
+          ? "In Safari, tap Share, then choose Add to Home Screen."
+          : "Open your browser menu and choose Install Fieldnote or Add to Home Screen. If that option is unavailable, try a browser that supports installing web apps.";
+        openModal("Install Fieldnote", instructions, [], "Got it", () => "");
+      }
+      async function installApp() {
+        if (!deferredInstallPrompt) {
+          showInstallInstructions();
+          return;
+        }
+        const promptEvent = deferredInstallPrompt;
+        deferredInstallPrompt = null;
+        try {
+          await promptEvent.prompt();
+          const choice = await promptEvent.userChoice;
+          if (choice.outcome === "accepted") toast("Fieldnote is being installed.");
+        } catch (error) {
+          console.error("Could not start app installation:", error);
+          toast("Could not start installation. Use your browser menu to install the app.");
+        }
+      }
+      window.addEventListener("beforeinstallprompt", (event) => {
+        event.preventDefault();
+        deferredInstallPrompt = event;
+      });
+      window.addEventListener("appinstalled", () => {
+        deferredInstallPrompt = null;
+        updateCloudControls();
+        toast("Fieldnote has been installed.");
+      });
       function showAuthGate(message = "") {
         $("#overlay-root").innerHTML = `<div class="auth-screen"><section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title"><div class="auth-brand"><span class="brand-mark">♧</span><strong>Fieldnote · Lucea's Poultry Farm</strong></div><div class="auth-kicker">Secure manager access</div><h2 id="auth-title">Welcome back</h2><p>Sign in with the email and password provided by your farm's primary manager.</p><form class="auth-form" id="auth-form">${field("email","Email","email",{placeholder:"you@example.com"})}${field("password","Password","password",{placeholder:"Enter your password"})}<div class="auth-error" role="alert">${esc(message)}</div><button class="button" type="submit">Sign in</button></form></section></div>`;
         $("#auth-form").addEventListener("submit", async (event) => {
@@ -745,6 +791,7 @@
             if (setupError) throw setupError;
             requiresPasswordSetup = false;
             $("#overlay-root").innerHTML = "";
+            updateCloudControls();
             toast("Password saved. Welcome to the farm team.");
           } catch (error) {
             console.error("Could not complete invited account setup:", error);
@@ -1512,6 +1559,7 @@
       $("#alerts-button").addEventListener("click", () => { currentPage = "inventory"; searchTerm = ""; render(); $("#content").scrollIntoView({behavior:"smooth"}); });
       $("#currency-button").addEventListener("click", changeCurrency);
       $("#account-button").addEventListener("click", accountAction);
+      $("#install-app-button").addEventListener("click", installApp);
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
           if (!$(".auth-screen")) $("#overlay-root").innerHTML = "";
@@ -1527,6 +1575,10 @@
         startCloudSession();
       }
       else persist();
+      if ("serviceWorker" in navigator && window.isSecureContext) {
+        navigator.serviceWorker.register("./service-worker.js")
+          .catch((error) => console.error("Could not register the app service worker:", error));
+      }
     })();
   </script>
 </body>

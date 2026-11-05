@@ -20,8 +20,10 @@ A browser-based layer-farm manager. Run `index.html` directly for local-only use
    supabase secrets set SITE_URL=https://your-deployed-site.example
    ```
 
-6. Deploy `index.html`, `favicon.svg`, `supabase-config.js`, and the other app files together to a static host using HTTPS. Set the deployed URL as the Supabase **Site URL** and an allowed redirect URL.
+6. Deploy `index.html`, `manifest.webmanifest`, `service-worker.js`, `favicon.svg`, `supabase-config.js`, and the other app files together to a static host using HTTPS. Set the deployed URL as the Supabase **Site URL** and an allowed redirect URL.
 7. The existing farm owner signs in as the primary manager. From **Team**, they can invite managers or assistant managers by email. Invitees open the email link and set their own password before using the app. Managers and assistant managers can view and edit farm records; only the primary manager can manage team access.
+
+After sign-in, managers can select **Install app** in the top bar to install Fieldnote from a supported browser. On iPhone or iPad, open the app in Safari, tap **Share**, then choose **Add to Home Screen**. Installation requires the app to be hosted over HTTPS (or opened on localhost).
 
 The Supabase URL and anon/public key are browser-visible credentials. This is expected: the SQL schema protects farm records and team membership with Supabase Auth and row-level security.
 
